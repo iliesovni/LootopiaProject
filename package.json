@@ -7,7 +7,6 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-
     "db:migrate": "npx prisma migrate dev --name update_schema",
     "db:reset": "npx prisma migrate reset",
     "db:recreate": "rm -rf prisma/migrations && npx prisma migrate dev --name init"
