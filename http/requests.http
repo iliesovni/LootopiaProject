@@ -1,22 +1,25 @@
 @host = http://localhost:3000
-@partnerId = 1221f109-7d51-476a-90c1-bb5475d7ed30
-@huntId = 6f4c330c-64e3-45e8-9555-cf5961077e2d
+@partnerId = 21a5c9cd-9520-43aa-b30b-030e32355724
+@huntId = 2664134f-1689-4df6-9540-1163cb7b5b64
 @stepId = 9c0cddaf-2964-4593-a9b7-616362765e0f
 @clueId = a046253f-4513-462a-9ef0-cb2452af315a
 
-### TEST DB
+# @name TEST DB
 GET {{host}}/api/test-db
 Accept: application/json
 
-### HUNTS - GET ALL
+###
+# @name HUNTS_GET_ALL
 GET {{host}}/api/hunts
 Accept: application/json
 
-### HUNTS - GET ONE
+###
+# @name HUNTS - GET ONE
 GET {{host}}/api/hunts/{{huntId}}
 Accept: application/json
 
-### HUNTS - POST
+###
+# @name HUNTS - POST
 POST {{host}}/api/hunts
 Content-Type: application/json
 
@@ -31,7 +34,8 @@ Content-Type: application/json
   "createdById": "{{partnerId}}"
 }
 
-### HUNTS - PATCH
+###
+# @name HUNTS - PATCH
 PATCH {{host}}/api/hunts/{{huntId}}
 Content-Type: application/json
 
@@ -40,18 +44,22 @@ Content-Type: application/json
   "difficulty": "HARD"
 }
 
-### HUNTS - DELETE
+###
+# @name HUNTS - DELETE
 DELETE {{host}}/api/hunts/{{huntId}}
 
-### STEPS - GET ALL
+###
+# @name STEPS - GET ALL
 GET {{host}}/api/steps
 Accept: application/json
 
-### STEPS - GET ONE
+###
+# @name STEPS - GET ONE
 GET {{host}}/api/steps/{{stepId}}
 Accept: application/json
 
-### STEPS - POST
+###
+# @name STEPS - POST
 POST {{host}}/api/hunts/{{huntId}}/steps
 Content-Type: application/json
 
@@ -67,7 +75,8 @@ Content-Type: application/json
   "arAssetUrl": "https://example.com/ar/kiosque.png"
 }
 
-### STEPS - PATCH
+###
+# @name STEPS - PATCH
 PATCH {{host}}/api/steps/{{stepId}}
 Content-Type: application/json
 
@@ -76,18 +85,22 @@ Content-Type: application/json
   "pointsReward": 80
 }
 
-### STEPS - DELETE
+###
+# @name STEPS - DELETE
 DELETE {{host}}/api/steps/{{stepId}}
 
-### CLUES - GET ALL
+###
+# @name CLUES - GET ALL
 GET {{host}}/api/clues
 Accept: application/json
 
-### CLUES - GET ONE
+###
+# @name CLUES - GET ONE
 GET {{host}}/api/clues/{{clueId}}
 Accept: application/json
 
-### CLUES - POST
+###
+# @name CLUES - POST
 POST {{host}}/api/steps/{{stepId}}/clues
 Content-Type: application/json
 
@@ -97,7 +110,8 @@ Content-Type: application/json
   "orderIndex": 2
 }
 
-### CLUES - PATCH
+###
+# @name CLUES - PATCH
 PATCH {{host}}/api/clues/{{clueId}}
 Content-Type: application/json
 
@@ -106,5 +120,6 @@ Content-Type: application/json
   "penaltyPoints": 3
 }
 
-### CLUES - DELETE
+###
+# @name CLUES - DELETE
 DELETE {{host}}/api/clues/{{clueId}}
