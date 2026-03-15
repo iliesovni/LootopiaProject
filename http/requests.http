@@ -1,25 +1,37 @@
 @host = http://localhost:3000
 @partnerId = 1221f109-7d51-476a-90c1-bb5475d7ed30
-@huntId= 8109f8bc-87fe-482e-8ff2-7b4018ebd144
+@huntId = 6f4c330c-64e3-45e8-9555-cf5961077e2d
+@stepId = 9c0cddaf-2964-4593-a9b7-616362765e0f
+@clueId = a046253f-4513-462a-9ef0-cb2452af315a
 
+### TEST DB
+GET {{host}}/api/test-db
+Accept: application/json
+
+### HUNTS - GET ALL
 GET {{host}}/api/hunts
 Accept: application/json
-###
+
+### HUNTS - GET ONE
 GET {{host}}/api/hunts/{{huntId}}
 Accept: application/json
-###
+
+### HUNTS - POST
 POST {{host}}/api/hunts
 Content-Type: application/json
 
 {
-  "title": "Nouvelle chasse au trésor",
-  "location": "Paris",
-  "difficulty": "MEDIUM",
-  "startLat": 48.8566,
-  "startLng": 2.3522,
+  "title": "Mystère au Parc Borély",
+  "description": "Une chasse au trésor familiale dans le parc Borély.",
+  "location": "Marseille",
+  "difficulty": "EASY",
+  "isPublic": true,
+  "startLat": 43.2699,
+  "startLng": 5.3878,
   "createdById": "{{partnerId}}"
 }
-###
+
+### HUNTS - PATCH
 PATCH {{host}}/api/hunts/{{huntId}}
 Content-Type: application/json
 
@@ -27,5 +39,72 @@ Content-Type: application/json
   "title": "Chasse mise à jour",
   "difficulty": "HARD"
 }
-###
+
+### HUNTS - DELETE
 DELETE {{host}}/api/hunts/{{huntId}}
+
+### STEPS - GET ALL
+GET {{host}}/api/steps
+Accept: application/json
+
+### STEPS - GET ONE
+GET {{host}}/api/steps/{{stepId}}
+Accept: application/json
+
+### STEPS - POST
+POST {{host}}/api/hunts/{{huntId}}/steps
+Content-Type: application/json
+
+{
+  "title": "Le kiosque",
+  "description": "Trouve le kiosque central du parc.",
+  "latitude": 43.2705,
+  "longitude": 5.3882,
+  "radiusMeters": 25,
+  "orderIndex": 3,
+  "pointsReward": 60,
+  "arMarkerType": "IMAGE",
+  "arAssetUrl": "https://example.com/ar/kiosque.png"
+}
+
+### STEPS - PATCH
+PATCH {{host}}/api/steps/{{stepId}}
+Content-Type: application/json
+
+{
+  "title": "Le kiosque rénové",
+  "pointsReward": 80
+}
+
+### STEPS - DELETE
+DELETE {{host}}/api/steps/{{stepId}}
+
+### CLUES - GET ALL
+GET {{host}}/api/clues
+Accept: application/json
+
+### CLUES - GET ONE
+GET {{host}}/api/clues/{{clueId}}
+Accept: application/json
+
+### CLUES - POST
+POST {{host}}/api/steps/{{stepId}}/clues
+Content-Type: application/json
+
+{
+  "content": "Cherche près de la structure ronde au centre.",
+  "penaltyPoints": 5,
+  "orderIndex": 2
+}
+
+### CLUES - PATCH
+PATCH {{host}}/api/clues/{{clueId}}
+Content-Type: application/json
+
+{
+  "content": "Cherche près de la structure ronde et verte.",
+  "penaltyPoints": 3
+}
+
+### CLUES - DELETE
+DELETE {{host}}/api/clues/{{clueId}}
