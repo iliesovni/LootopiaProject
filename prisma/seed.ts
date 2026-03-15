@@ -1,7 +1,13 @@
+import "dotenv/config";
 import { PrismaClient, Role, Difficulty, ParticipationStatus, ARMarkerType } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcrypt";
 
-const prisma = new PrismaClient();
+const adapter = new PrismaPg({
+    connectionString: process.env.DATABASE_URL!,
+});
+
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
     console.log("🌱 Starting database seed...");
@@ -117,9 +123,15 @@ async function main() {
     });
 
     // --- UPDATE USER STATS ---
-    await prisma.userStats.update({
+    await prisma.userStats.upsert({
         where: { userId: playerUser.id },
-        data: {
+        update: {
+            totalPoints: 50,
+            huntsCompleted: 0,
+            level: 1,
+        },
+        create: {
+            userId: playerUser.id,
             totalPoints: 50,
             huntsCompleted: 0,
             level: 1,

@@ -52,7 +52,7 @@ model Partner {
   website          String?
 
   userId String @unique
-  user   User   @relation(fields: [userId], references: [id])
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Hunt {
@@ -87,10 +87,12 @@ model Step {
   arAssetUrl   String?
 
   huntId String
-  hunt   Hunt   @relation(fields: [huntId], references: [id])
+  hunt   Hunt   @relation(fields: [huntId], references: [id], onDelete: Cascade)
 
   clues        Clue[]
   stepProgress StepProgress[]
+
+  @@unique([huntId, orderIndex])
 }
 
 model Clue {
@@ -100,7 +102,9 @@ model Clue {
   orderIndex    Int
 
   stepId String
-  step   Step   @relation(fields: [stepId], references: [id])
+  step   Step   @relation(fields: [stepId], references: [id], onDelete: Cascade)
+
+  @@unique([stepId, orderIndex])
 }
 
 model Participation {
@@ -111,10 +115,10 @@ model Participation {
   status      ParticipationStatus @default(IN_PROGRESS)
 
   userId String
-  user   User   @relation(fields: [userId], references: [id])
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   huntId String
-  hunt   Hunt   @relation(fields: [huntId], references: [id])
+  hunt   Hunt   @relation(fields: [huntId], references: [id], onDelete: Cascade)
 
   stepProgress StepProgress[]
 
@@ -129,10 +133,10 @@ model StepProgress {
   pointsEarned Int       @default(0)
 
   participationId String
-  participation   Participation @relation(fields: [participationId], references: [id])
+  participation   Participation @relation(fields: [participationId], references: [id], onDelete: Cascade)
 
   stepId String
-  step   Step   @relation(fields: [stepId], references: [id])
+  step   Step   @relation(fields: [stepId], references: [id], onDelete: Cascade)
 
   @@unique([participationId, stepId])
 }
@@ -143,5 +147,5 @@ model UserStats {
   huntsCompleted Int    @default(0)
   level          Int    @default(1)
 
-  user User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

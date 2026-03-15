@@ -1,0 +1,31 @@
+@host = http://localhost:3000
+@partnerId = 1221f109-7d51-476a-90c1-bb5475d7ed30
+@huntId= 8109f8bc-87fe-482e-8ff2-7b4018ebd144
+
+GET {{host}}/api/hunts
+Accept: application/json
+###
+GET {{host}}/api/hunts/{{huntId}}
+Accept: application/json
+###
+POST {{host}}/api/hunts
+Content-Type: application/json
+
+{
+  "title": "Nouvelle chasse au trésor",
+  "location": "Paris",
+  "difficulty": "MEDIUM",
+  "startLat": 48.8566,
+  "startLng": 2.3522,
+  "createdById": "{{partnerId}}"
+}
+###
+PATCH {{host}}/api/hunts/{{huntId}}
+Content-Type: application/json
+
+{
+  "title": "Chasse mise à jour",
+  "difficulty": "HARD"
+}
+###
+DELETE {{host}}/api/hunts/{{huntId}}
