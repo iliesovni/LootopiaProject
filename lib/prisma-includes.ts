@@ -46,3 +46,40 @@ export const clueInclude = {
         },
     },
 };
+
+export const participationInclude = {
+    hunt: {
+        select: {
+            id: true,
+            title: true,
+            location: true,
+            difficulty: true,
+            isPublic: true,
+        },
+    },
+    user: {
+        select: {
+            id: true,
+            username: true,
+            email: true,
+            role: true,
+        },
+    },
+    stepProgress: {
+        include: {
+            step: {
+                select: {
+                    id: true,
+                    title: true,
+                    orderIndex: true,
+                    pointsReward: true,
+                },
+            },
+        },
+        orderBy: {
+            step: {
+                orderIndex: "asc" as const,
+            },
+        },
+    },
+};
