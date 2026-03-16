@@ -14,4 +14,7 @@ export const createHuntSchema = z.object({
 
 export const updateHuntSchema = createHuntSchema
     .omit({ createdById: true })
-    .partial();
+    .partial()
+    .refine((data) => Object.keys(data).length > 0, {
+        message: "Au moins un champ doit être fourni pour la mise à jour.",
+    });
