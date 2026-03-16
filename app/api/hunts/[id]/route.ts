@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z, ZodError } from "zod";
 import { updateHuntSchema } from "@/schemas/hunt";
+import { huntInclude } from "@/lib/prisma-includes";
 
 type RouteContext = {
     params: Promise<{
@@ -20,28 +21,7 @@ export async function GET(
             where: {
                 id,
             },
-            include: {
-                createdBy: {
-                    select: {
-                        id: true,
-                        username: true,
-                        email: true,
-                        role: true,
-                    },
-                },
-                steps: {
-                    orderBy: {
-                        orderIndex: "asc",
-                    },
-                    include: {
-                        clues: {
-                            orderBy: {
-                                orderIndex: "asc",
-                            },
-                        },
-                    },
-                },
-            },
+            include: huntInclude,
         });
 
         if (!hunt) {

@@ -1,23 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { stepInclude } from "@/lib/prisma-includes";
 
 export async function GET() {
     try {
         const steps = await prisma.step.findMany({
-            include: {
-                hunt: {
-                    select: {
-                        id: true,
-                        title: true,
-                        location: true,
-                    },
-                },
-                clues: {
-                    orderBy: {
-                        orderIndex: "asc",
-                    },
-                },
-            },
+            include: stepInclude,
             orderBy: [{ huntId: "asc" }, { orderIndex: "asc" }],
         });
 

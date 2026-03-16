@@ -3,37 +3,16 @@ import { prisma } from "@/lib/prisma";
 import { createHuntSchema } from "@/schemas/hunt";
 import { z, ZodError } from "zod";
 import { Prisma } from "@prisma/client";
+import { huntInclude } from "@/lib/prisma-includes";
 
 export async function GET() {
     try {
         const hunts = await prisma.hunt.findMany({
-            include: {
-                createdBy: {
-                    select: {
-                        id: true,
-                        username: true,
-                        email: true,
-                        role: true,
-                    },
-                },
-                steps: {
-                    orderBy: {
-                        orderIndex: "asc",
-                    },
-                    include: {
-                        clues: {
-                            orderBy: {
-                                orderIndex: "asc",
-                            },
-                        },
-                    },
-                },
-            },
+            include: huntInclude,
             orderBy: {
                 createdAt: "desc",
             },
         });
-
         return NextResponse.json({
             ok: true,
             count: hunts.length,

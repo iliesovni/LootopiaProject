@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { updateStepSchema } from "@/schemas/step";
 import { z, ZodError } from "zod";
 import {Prisma} from "@prisma/client";
+import { stepInclude } from "@/lib/prisma-includes";
 
 type RouteContext = {
     params: Promise<{
@@ -19,20 +20,7 @@ export async function GET(
 
         const step = await prisma.step.findUnique({
             where: { id },
-            include: {
-                hunt: {
-                    select: {
-                        id: true,
-                        title: true,
-                        location: true,
-                    },
-                },
-                clues: {
-                    orderBy: {
-                        orderIndex: "asc",
-                    },
-                },
-            },
+            include: stepInclude,
         });
 
         if (!step) {
@@ -88,13 +76,7 @@ export async function PATCH(
         const updatedStep = await prisma.step.update({
             where: { id },
             data,
-            include: {
-                clues: {
-                    orderBy: {
-                        orderIndex: "asc",
-                    },
-                },
-            },
+            include: stepInclude,
         });
 
         return NextResponse.json({

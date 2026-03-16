@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { updateClueSchema } from "@/schemas/clue";
 import { z, ZodError } from "zod";
 import {Prisma} from "@prisma/client";
+import { clueInclude } from "@/lib/prisma-includes";
 
 type RouteContext = {
     params: Promise<{
@@ -19,16 +20,7 @@ export async function GET(
 
         const clue = await prisma.clue.findUnique({
             where: { id },
-            include: {
-                step: {
-                    select: {
-                        id: true,
-                        title: true,
-                        orderIndex: true,
-                        huntId: true,
-                    },
-                },
-            },
+            include: clueInclude,
         });
 
         if (!clue) {

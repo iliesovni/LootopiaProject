@@ -1,19 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { clueInclude } from "@/lib/prisma-includes";
 
 export async function GET() {
     try {
         const clues = await prisma.clue.findMany({
-            include: {
-                step: {
-                    select: {
-                        id: true,
-                        title: true,
-                        orderIndex: true,
-                        huntId: true,
-                    },
-                },
-            },
+            include: clueInclude,
             orderBy: [{ stepId: "asc" }, { orderIndex: "asc" }],
         });
 
