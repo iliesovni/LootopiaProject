@@ -1,7 +1,8 @@
 import {NextRequest, NextResponse} from "next/server";
 import { prisma } from "@/lib/prisma";
-import {createHuntSchema, updateHuntSchema} from "@/schemas/hunt";
+import { createHuntSchema } from "@/schemas/hunt";
 import { z, ZodError } from "zod";
+import { Prisma } from "@prisma/client";
 
 export async function GET() {
     try {
@@ -80,6 +81,18 @@ export async function POST(request: NextRequest) {
                 },
                 { status: 400 }
             );
+        }
+
+        if (error instanceof Prisma.PrismaClientKnownRequestError) {
+            if (error.code === "P2003") {
+                return NextResponse.json(
+                    {
+                        ok: false,
+                        message: "Le créateur indiqué n'existe pas.",
+                    },
+                    { status: 400 }
+                );
+            }
         }
 
         return NextResponse.json(

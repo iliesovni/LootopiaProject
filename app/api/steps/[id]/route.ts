@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { updateStepSchema } from "@/schemas/step";
 import { z, ZodError } from "zod";
+import {Prisma} from "@prisma/client";
 
 type RouteContext = {
     params: Promise<{
@@ -113,6 +114,18 @@ export async function PATCH(
                 },
                 { status: 400 }
             );
+        }
+
+        if (error instanceof Prisma.PrismaClientKnownRequestError) {
+            if (error.code === "P2002") {
+                return NextResponse.json(
+                    {
+                        ok: false,
+                        message: "Une étape avec ce numéro d'ordre existe déjà dans cette chasse.",
+                    },
+                    { status: 400 }
+                );
+            }
         }
 
         return NextResponse.json(
