@@ -465,12 +465,14 @@ async function main() {
     console.log("🌱 Seed completed successfully!");
 }
 
-try {
-    await main();
-    console.log("🌱 Seed completed successfully!");
-} catch (e) {
-    console.error("❌ Seed failed:", e);
-    process.exit(1);
-} finally {
-    await prisma.$disconnect();
-}
+main()
+    .then(() => {
+        console.log("🌱 Seed completed successfully!");
+    })
+    .catch((e) => {
+        console.error("❌ Seed failed:", e);
+        process.exit(1);
+    })
+    .finally(async () => {
+        await prisma.$disconnect();
+    });

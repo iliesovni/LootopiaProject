@@ -1,5 +1,5 @@
 @host = http://localhost:3000
-@partnerId = 21a5c9cd-9520-43aa-b30b-030e32355724
+@partnerId = c666224e-8386-4e90-9da3-556ec4cc5348
 @huntId = 2664134f-1689-4df6-9540-1163cb7b5b64
 @stepId = 9c0cddaf-2964-4593-a9b7-616362765e0f
 @clueId = a046253f-4513-462a-9ef0-cb2452af315a
@@ -123,3 +123,12 @@ Content-Type: application/json
 ###
 # @name CLUES - DELETE
 DELETE {{host}}/api/clues/{{clueId}}
+
+###
+# @name PARTICIPATION - TEST
+POST http://localhost:3000/api/participations/2f436eed-9da8-498d-83d3-f71760e8a993/complete-step
+Content-Type: application/json
+
+{
+  "stepId": "705c4eb9-ee5b-4d08-871f-fbeb0ba635db"
+}

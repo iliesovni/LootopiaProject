@@ -35,26 +35,26 @@ enum HuntMode {
 }
 
 model Hunt {
-  id          String    @id @default(uuid())
+  id          String     @id @default(uuid())
   title       String
   description String?
   location    String
   difficulty  Difficulty
-  isPublic    Boolean   @default(true)
+  isPublic    Boolean    @default(true)
 
-  startLat    Float
-  startLng    Float
+  startLat Float
+  startLng Float
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   createdById String
-  createdBy   User      @relation("UserHunts", fields: [createdById], references: [id], onDelete: Cascade)
+  createdBy   User   @relation("UserHunts", fields: [createdById], references: [id], onDelete: Cascade)
 
-  mode        HuntMode  @default(COMMUNITY)
+  mode HuntMode @default(COMMUNITY)
 
-  partnerId   String?
-  partner     Partner?  @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  partnerId String?
+  partner   Partner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
 
   steps          Step[]
   participations Participation[]
