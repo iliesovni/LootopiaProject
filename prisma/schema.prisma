@@ -29,6 +29,37 @@ enum ARMarkerType {
   MODEL_3D
 }
 
+enum HuntMode {
+  COMMUNITY
+  PARTNER
+}
+
+model Hunt {
+  id          String    @id @default(uuid())
+  title       String
+  description String?
+  location    String
+  difficulty  Difficulty
+  isPublic    Boolean   @default(true)
+
+  startLat    Float
+  startLng    Float
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  createdById String
+  createdBy   User      @relation("UserHunts", fields: [createdById], references: [id], onDelete: Cascade)
+
+  mode        HuntMode  @default(COMMUNITY)
+
+  partnerId   String?
+  partner     Partner?  @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+
+  steps          Step[]
+  participations Participation[]
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
@@ -46,31 +77,14 @@ model User {
 }
 
 model Partner {
-  id               String  @id @default(uuid())
-  organizationName String
-  description      String?
-  website          String?
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  companyName String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model Hunt {
-  id          String     @id @default(uuid())
-  title       String
-  description String?
-  location    String
-  difficulty  Difficulty
-  isPublic    Boolean    @default(true)
-  startLat    Float
-  startLng    Float
-  createdAt   DateTime   @default(now())
-
-  createdById String
-  createdBy   User   @relation("UserHunts", fields: [createdById], references: [id])
-
-  steps          Step[]
-  participations Participation[]
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hunts Hunt[]
 }
 
 model Step {
@@ -147,5 +161,5 @@ model UserStats {
   huntsCompleted Int    @default(0)
   level          Int    @default(1)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade) 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

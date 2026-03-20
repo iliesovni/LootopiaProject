@@ -7,9 +7,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:migrate": "npx prisma migrate dev --name update_schema",
+    "db:format": "npx prisma format",
+    "db:validate": "npx prisma validate",
+    "db:apply": "npm run db:format && npm run db:validate",
+    "db:migrate": "npx prisma migrate dev --name",
+    "db:generate": "npx prisma generate",
+    "db:dev": "npm run db:apply && npm run db:migrate",
+    "db:studio": "npx prisma studio",
     "db:reset": "npx prisma migrate reset",
-    "db:recreate": "rm -rf prisma/migrations && npx prisma migrate dev --name init"
+    "db:recreate": "rm -rf prisma/migrations && npx prisma migrate reset --force"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

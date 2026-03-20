@@ -2,6 +2,7 @@ import "dotenv/config";
 import {
     ARMarkerType,
     Difficulty,
+    HuntMode,
     ParticipationStatus,
     PrismaClient,
     Role,
@@ -29,7 +30,7 @@ async function main() {
     await prisma.partner.deleteMany();
     await prisma.user.deleteMany();
 
-    const partner1 = await prisma.user.create({
+    const partnerUser1 = await prisma.user.create({
         data: {
             email: "partner@example.com",
             username: "partner1",
@@ -37,15 +38,16 @@ async function main() {
             role: Role.PARTNER,
             partner: {
                 create: {
-                    organizationName: "Out of Cache",
-                    description: "Agence digitale spécialisée dans les expériences ludiques",
-                    website: "https://outofcache.example.com",
+                    companyName: "Out of Cache",
                 },
             },
         },
+        include: {
+            partner: true,
+        },
     });
 
-    const partner2 = await prisma.user.create({
+    const partnerUser2 = await prisma.user.create({
         data: {
             email: "partner2@example.com",
             username: "partner2",
@@ -53,11 +55,12 @@ async function main() {
             role: Role.PARTNER,
             partner: {
                 create: {
-                    organizationName: "Treasure Makers",
-                    description: "Création de parcours urbains et immersifs",
-                    website: "https://treasuremakers.example.com",
+                    companyName: "Treasure Makers",
                 },
             },
+        },
+        include: {
+            partner: true,
         },
     });
 
@@ -116,22 +119,27 @@ async function main() {
             location: "Marseille",
             difficulty: Difficulty.MEDIUM,
             isPublic: true,
-            startLat: 43.2965,
-            startLng: 5.3698,
-            createdById: partner1.id,
+            startLat: 43.3006,
+            startLng: 5.367,
+            createdById: partnerUser1.id,
+            mode: HuntMode.PARTNER,
+            partnerId: partnerUser1.partner!.id,
         },
     });
 
     const hunt2 = await prisma.hunt.create({
         data: {
             title: "Mystères du Parc Borély",
-            description: "Une aventure familiale dans l'un des plus beaux parcs de Marseille",
+            description:
+                "Une aventure familiale dans l'un des plus beaux parcs de Marseille",
             location: "Marseille",
             difficulty: Difficulty.EASY,
             isPublic: true,
-            startLat: 43.2699,
-            startLng: 5.3878,
-            createdById: partner1.id,
+            startLat: 43.3006,
+            startLng: 5.367,
+            createdById: partnerUser1.id,
+            mode: HuntMode.PARTNER,
+            partnerId: partnerUser1.partner!.id,
         },
     });
 
@@ -142,9 +150,25 @@ async function main() {
             location: "Aix-en-Provence",
             difficulty: Difficulty.HARD,
             isPublic: false,
-            startLat: 43.5297,
-            startLng: 5.4474,
-            createdById: partner2.id,
+            startLat: 54.36,
+            startLng: 10.67,
+            createdById: partnerUser2.id,
+            mode: HuntMode.PARTNER,
+            partnerId: partnerUser2.partner!.id,
+        },
+    });
+
+    const communityHunt = await prisma.hunt.create({
+        data: {
+            title: "Balade Mystère au Panier",
+            description: "Une chasse communautaire créée par un joueur dans le quartier du Panier",
+            location: "Marseille",
+            difficulty: Difficulty.EASY,
+            isPublic: true,
+            startLat: 43.3006,
+            startLng: 5.367,
+            createdById: player1.id,
+            mode: HuntMode.COMMUNITY,
         },
     });
 
@@ -330,6 +354,28 @@ async function main() {
         },
     });
 
+    await prisma.step.create({
+        data: {
+            title: "La place cachée",
+            description: "Trouve la petite place colorée du Panier",
+            latitude: 43.3008,
+            longitude: 5.3656,
+            radiusMeters: 20,
+            orderIndex: 1,
+            pointsReward: 25,
+            huntId: communityHunt.id,
+            clues: {
+                create: [
+                    {
+                        content: "Cherche une place discrète entre les ruelles",
+                        penaltyPoints: 3,
+                        orderIndex: 1,
+                    },
+                ],
+            },
+        },
+    });
+
     await prisma.participation.create({
         data: {
             userId: player1.id,
@@ -419,11 +465,12 @@ async function main() {
     console.log("🌱 Seed completed successfully!");
 }
 
-main()
-    .catch((e) => {
-        console.error("❌ Seed failed:", e);
-        process.exit(1);
-    })
-    .finally(async () => {
-        await prisma.$disconnect();
-    });
+try {
+    await main();
+    console.log("🌱 Seed completed successfully!");
+} catch (e) {
+    console.error("❌ Seed failed:", e);
+    process.exit(1);
+} finally {
+    await prisma.$disconnect();
+}
