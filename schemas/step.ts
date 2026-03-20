@@ -7,7 +7,7 @@ export const createStepSchema = z.object({
     latitude: z.number().min(-90).max(90),
     longitude: z.number().min(-180).max(180),
     radiusMeters: z.number().int().positive("Le rayon doit être supérieur à 0."),
-    orderIndex: z.number().int().nonnegative("L'ordre doit être positif ou nul."),
+    orderIndex: z.number().int().min(1, "L'ordre doit être supérieur ou égal à 1."),
     pointsReward: z.number().int().nonnegative("Les points doivent être positifs ou nuls."),
     arMarkerType: z.enum(ARMarkerType).optional().nullable(),
     arAssetUrl: z.url().optional().nullable(),

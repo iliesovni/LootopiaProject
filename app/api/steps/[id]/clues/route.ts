@@ -1,11 +1,33 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import {Prisma} from "@prisma/client";
-import {z, ZodError} from "zod";
+import { Prisma } from "@prisma/client";
 
-export async function GET() {
+export async function GET(
+    _request: Request,
+    context: { params: Promise<{ id: string }> }
+) {
     try {
+        const { id } = await context.params;
+
+        const step = await prisma.step.findUnique({
+            where: { id },
+            select: {
+                id: true,
+            },
+        });
+
+        if (!step) {
+            return NextResponse.json(
+                {
+                    ok: false,
+                    message: "Étape introuvable.",
+                },
+                { status: 404 }
+            );
+        }
+
         const clues = await prisma.clue.findMany({
+            where: { stepId: id },
             include: {
                 step: {
                     select: {
@@ -16,7 +38,9 @@ export async function GET() {
                     },
                 },
             },
-            orderBy: [{ stepId: "asc" }, { orderIndex: "asc" }],
+            orderBy: {
+                orderIndex: "asc",
+            },
         });
 
         return NextResponse.json({
@@ -25,45 +49,22 @@ export async function GET() {
             clues,
         });
     } catch (error) {
-        console.error("POST /api/steps/[id]/clues error:", error);
+        console.error("GET /api/steps/[id]/clues error:", error);
 
-        if (error instanceof ZodError) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError) {
             return NextResponse.json(
                 {
                     ok: false,
-                    message: "Données invalides.",
-                    errors: z.flattenError(error),
+                    message: "Erreur base de données lors de la récupération des indices.",
                 },
-                { status: 400 }
+                { status: 500 }
             );
-        }
-
-        if (error instanceof Prisma.PrismaClientKnownRequestError) {
-            if (error.code === "P2002") {
-                return NextResponse.json(
-                    {
-                        ok: false,
-                        message: "Un indice avec ce numéro d'ordre existe déjà pour cette étape.",
-                    },
-                    { status: 400 }
-                );
-            }
-
-            if (error.code === "P2003") {
-                return NextResponse.json(
-                    {
-                        ok: false,
-                        message: "L'étape indiquée n'existe pas.",
-                    },
-                    { status: 400 }
-                );
-            }
         }
 
         return NextResponse.json(
             {
                 ok: false,
-                message: "Erreur lors de la création de l'indice.",
+                message: "Erreur lors de la récupération des indices.",
             },
             { status: 500 }
         );

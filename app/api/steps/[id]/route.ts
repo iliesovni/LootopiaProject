@@ -52,69 +52,139 @@ export async function GET(
 
 export async function PATCH(
     request: NextRequest,
-    { params }: RouteContext
+    context: { params: Promise<{ id: string }> }
 ) {
     try {
-        const { id } = await params;
+        const { id } = await context.params;
         const body = await request.json();
-        const data = updateStepSchema.parse(body);
 
-        const existingStep = await prisma.step.findUnique({
-            where: { id },
-        });
+        const validation = updateStepSchema.safeParse(body);
 
-        if (!existingStep) {
+        if (!validation.success) {
             return NextResponse.json(
                 {
-                    ok: false,
-                    message: "Étape introuvable.",
-                },
-                { status: 404 }
-            );
-        }
-
-        const updatedStep = await prisma.step.update({
-            where: { id },
-            data,
-            include: stepInclude,
-        });
-
-        return NextResponse.json({
-            ok: true,
-            message: "Étape mise à jour avec succès.",
-            step: updatedStep,
-        });
-    } catch (error) {
-        console.error("PATCH /api/steps/[id] error:", error);
-
-        if (error instanceof ZodError) {
-            return NextResponse.json(
-                {
-                    ok: false,
-                    message: "Données invalides.",
-                    errors: z.flattenError(error),
+                    error: "Payload invalide.",
+                    details: validation.error.issues,
                 },
                 { status: 400 }
             );
         }
 
-        if (error instanceof Prisma.PrismaClientKnownRequestError) {
-            if (error.code === "P2002") {
-                return NextResponse.json(
-                    {
-                        ok: false,
-                        message: "Une étape avec ce numéro d'ordre existe déjà dans cette chasse.",
-                    },
-                    { status: 400 }
-                );
+        const updatedStep = await prisma.$transaction(async (tx) => {
+            const existingStep = await tx.step.findUnique({
+                where: { id },
+                select: {
+                    id: true,
+                    huntId: true,
+                    orderIndex: true,
+                },
+            });
+
+            if (!existingStep) {
+                throw new Error("STEP_NOT_FOUND");
             }
+
+            const { orderIndex, ...otherUpdates } = validation.data;
+
+            // Pas de déplacement d'ordre : update simple
+            if (orderIndex === undefined || orderIndex === existingStep.orderIndex) {
+                return tx.step.update({
+                    where: { id },
+                    data: otherUpdates,
+                    include: stepInclude,
+                });
+            }
+
+            // On garde une indexation 1-based cohérente avec les données existantes
+            const stepsCount = await tx.step.count({
+                where: { huntId: existingStep.huntId },
+            });
+
+            const targetOrderIndex = Math.min(
+                Math.max(orderIndex, 1),
+                stepsCount
+            );
+
+            // On déplace temporairement la step hors de la plage pour éviter un conflit unique
+            await tx.step.update({
+                where: { id },
+                data: {
+                    orderIndex: 0,
+                },
+            });
+
+            // Déplacement vers le haut : les steps intermédiaires descendent
+            if (targetOrderIndex < existingStep.orderIndex) {
+                await tx.step.updateMany({
+                    where: {
+                        huntId: existingStep.huntId,
+                        orderIndex: {
+                            gte: targetOrderIndex,
+                            lt: existingStep.orderIndex,
+                        },
+                    },
+                    data: {
+                        orderIndex: {
+                            increment: 1,
+                        },
+                    },
+                });
+            }
+
+            // Déplacement vers le bas : les steps intermédiaires remontent
+            if (targetOrderIndex > existingStep.orderIndex) {
+                await tx.step.updateMany({
+                    where: {
+                        huntId: existingStep.huntId,
+                        orderIndex: {
+                            gt: existingStep.orderIndex,
+                            lte: targetOrderIndex,
+                        },
+                    },
+                    data: {
+                        orderIndex: {
+                            decrement: 1,
+                        },
+                    },
+                });
+            }
+
+            return tx.step.update({
+                where: { id },
+                data: {
+                    ...otherUpdates,
+                    orderIndex: targetOrderIndex,
+                },
+                include: stepInclude,
+            });
+        });
+
+        return NextResponse.json({
+            message: "Étape mise à jour avec succès.",
+            data: updatedStep,
+        });
+    } catch (error) {
+        if (error instanceof Error && error.message === "STEP_NOT_FOUND") {
+            return NextResponse.json(
+                { error: "Étape introuvable." },
+                { status: 404 }
+            );
         }
 
+        if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2025"
+        ) {
+            return NextResponse.json(
+                { error: "Étape introuvable." },
+                { status: 404 }
+            );
+        }
+
+        console.error("[UPDATE_STEP_ERROR]", error);
+
         return NextResponse.json(
-            {
-                ok: false,
-                message: "Erreur lors de la mise à jour de l'étape.",
-            },
+            { error: "Erreur serveur." },
             { status: 500 }
         );
     }

@@ -1,12 +1,32 @@
 @host = http://localhost:3000
-@partnerId = c666224e-8386-4e90-9da3-556ec4cc5348
-@huntId = 2664134f-1689-4df6-9540-1163cb7b5b64
-@stepId = 9c0cddaf-2964-4593-a9b7-616362765e0f
-@clueId = a046253f-4513-462a-9ef0-cb2452af315a
 
-# @name TEST DB
-GET {{host}}/api/test-db
-Accept: application/json
+# IDs fixes issus du seed.ts
+@partnerUserId = 11111111-1111-4111-8111-111111111111
+@partnerId = 22222222-2222-4222-8222-222222222222
+@player1Id = 33333333-3333-4333-8333-333333333333
+@player2Id = 44444444-4444-4444-8444-444444444444
+@player3Id = 55555555-5555-4555-8555-555555555555
+
+@mainHuntId = 66666666-6666-4666-8666-666666666666
+@startHuntId = 77777777-7777-4777-8777-777777777777
+@finishHuntId = 88888888-8888-4888-8888-888888888888
+@completedHuntId = 99999999-9999-4999-8999-999999999999
+
+@mainStep1Id = aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaa1
+@mainStep2Id = aaaaaaa2-aaaa-4aaa-8aaa-aaaaaaaaaaa2
+@startStep1Id = bbbbbbb1-bbbb-4bbb-8bbb-bbbbbbbbbbb1
+@startStep2Id = bbbbbbb2-bbbb-4bbb-8bbb-bbbbbbbbbbb2
+@finishStep1Id = ccccccc1-cccc-4ccc-8ccc-ccccccccccc1
+@finishStep2Id = ccccccc2-cccc-4ccc-8ccc-ccccccccccc2
+
+@mainClue1Id = eeeeeee1-eeee-4eee-8eee-eeeeeeeeeee1
+@mainClue2Id = eeeeeee2-eeee-4eee-8eee-eeeeeeeeeee2
+@mainClue3Id = eeeeeee3-eeee-4eee-8eee-eeeeeeeeeee3
+@mainClue4Id = eeeeeee4-eeee-4eee-8eee-eeeeeeeeeee4
+
+@mainParticipationId = 14141414-1414-4414-8414-141414141414
+@finishParticipationId = 15151515-1515-4515-8515-151515151515
+@completedParticipationId = 16161616-1616-4616-8616-161616161616
 
 ###
 # @name HUNTS_GET_ALL
@@ -14,60 +34,61 @@ GET {{host}}/api/hunts
 Accept: application/json
 
 ###
-# @name HUNTS - GET ONE
-GET {{host}}/api/hunts/{{huntId}}
+# @name HUNTS_GET_ONE
+GET {{host}}/api/hunts/{{mainHuntId}}
 Accept: application/json
 
 ###
-# @name HUNTS - POST
+# @name HUNTS_POST
 POST {{host}}/api/hunts
 Content-Type: application/json
 
 {
-  "title": "Mystère au Parc Borély",
-  "description": "Une chasse au trésor familiale dans le parc Borély.",
+  "title": "Mystère au Mucem",
+  "description": "Une chasse de test créée via requests.http.",
   "location": "Marseille",
   "difficulty": "EASY",
   "isPublic": true,
-  "startLat": 43.2699,
-  "startLng": 5.3878,
-  "createdById": "{{partnerId}}"
+  "startLat": 43.2961,
+  "startLng": 5.3612,
+  "createdById": "{{partnerUserId}}"
 }
 
 ###
-# @name HUNTS - PATCH
-PATCH {{host}}/api/hunts/{{huntId}}
+# @name HUNTS_PATCH
+PATCH {{host}}/api/hunts/{{mainHuntId}}
 Content-Type: application/json
 
 {
-  "title": "Chasse mise à jour",
+  "title": "Le parcours du Vieux-Port - version mise à jour",
   "difficulty": "HARD"
 }
 
 ###
-# @name HUNTS - DELETE
-DELETE {{host}}/api/hunts/{{huntId}}
+# @name HUNTS_DELETE
+# Remplacer PUT_HUNT_ID_HERE par un id réel à supprimer.
+# DELETE {{host}}/api/hunts/PUT_HUNT_ID_HERE
 
 ###
-# @name STEPS - GET ALL
+# @name STEPS_GET_ALL
 GET {{host}}/api/steps
 Accept: application/json
 
 ###
-# @name STEPS - GET ONE
-GET {{host}}/api/steps/{{stepId}}
+# @name STEPS_GET_ONE
+GET {{host}}/api/steps/{{mainStep1Id}}
 Accept: application/json
 
 ###
-# @name STEPS - POST
-POST {{host}}/api/hunts/{{huntId}}/steps
+# @name STEPS_POST
+POST {{host}}/api/hunts/{{mainHuntId}}/steps
 Content-Type: application/json
 
 {
   "title": "Le kiosque",
-  "description": "Trouve le kiosque central du parc.",
-  "latitude": 43.2705,
-  "longitude": 5.3882,
+  "description": "Trouve le kiosque central du port.",
+  "latitude": 43.2969,
+  "longitude": 5.3708,
   "radiusMeters": 25,
   "orderIndex": 3,
   "pointsReward": 60,
@@ -76,59 +97,114 @@ Content-Type: application/json
 }
 
 ###
-# @name STEPS - PATCH
-PATCH {{host}}/api/steps/{{stepId}}
+# @name STEPS_PATCH
+PATCH {{host}}/api/steps/{{mainStep1Id}}
 Content-Type: application/json
 
 {
-  "title": "Le kiosque rénové",
-  "pointsReward": 80
+  "title": "Le phare restauré",
+  "pointsReward": 55
 }
 
 ###
-# @name STEPS - DELETE
-DELETE {{host}}/api/steps/{{stepId}}
+# @name STEPS_DELETE
+# Remplacer PUT_STEP_ID_HERE par un id réel à supprimer.
+# DELETE {{host}}/api/steps/PUT_STEP_ID_HERE
 
 ###
-# @name CLUES - GET ALL
+# @name STEPS_GET_CLUES
+GET {{host}}/api/steps/{{mainStep1Id}}/clues
+Accept: application/json
+
+###
+# @name CLUES_GET_ALL
 GET {{host}}/api/clues
 Accept: application/json
 
 ###
-# @name CLUES - GET ONE
-GET {{host}}/api/clues/{{clueId}}
+# @name CLUES_GET_ONE
+GET {{host}}/api/clues/{{mainClue1Id}}
 Accept: application/json
 
 ###
-# @name CLUES - POST
-POST {{host}}/api/steps/{{stepId}}/clues
+# @name CLUES_POST
+# Route ajoutée : POST /api/clues
+POST {{host}}/api/clues
 Content-Type: application/json
 
 {
-  "content": "Cherche près de la structure ronde au centre.",
-  "penaltyPoints": 5,
-  "orderIndex": 2
+  "stepId": "{{mainStep1Id}}",
+  "content": "Regarde près de la borne d'amarrage.",
+  "penaltyPoints": 7
 }
 
 ###
-# @name CLUES - PATCH
-PATCH {{host}}/api/clues/{{clueId}}
+# @name CLUES_PATCH
+PATCH {{host}}/api/clues/{{mainClue1Id}}
 Content-Type: application/json
 
 {
-  "content": "Cherche près de la structure ronde et verte.",
-  "penaltyPoints": 3
+  "content": "Regarde près de la borne d'amarrage rouge.",
+  "penaltyPoints": 4,
+  "orderIndex": 1
 }
 
 ###
-# @name CLUES - DELETE
-DELETE {{host}}/api/clues/{{clueId}}
+# @name CLUES_DELETE
+# Remplacer PUT_CLUE_ID_HERE par un id réel à supprimer.
+# DELETE {{host}}/api/clues/PUT_CLUE_ID_HERE
 
 ###
-# @name PARTICIPATION - TEST
-POST http://localhost:3000/api/participations/2f436eed-9da8-498d-83d3-f71760e8a993/complete-step
+# @name PARTICIPATIONS_START
+# Utilise la chasse startHuntId, sans participation existante pour player2.
+POST {{host}}/api/participations/start
 Content-Type: application/json
 
 {
-  "stepId": "705c4eb9-ee5b-4d08-871f-fbeb0ba635db"
+  "userId": "{{player2Id}}",
+  "huntId": "{{startHuntId}}"
+}
+
+###
+# @name PARTICIPATIONS_GET_ONE
+GET {{host}}/api/participations/{{mainParticipationId}}
+Accept: application/json
+
+###
+# @name PARTICIPATIONS_USE_CLUE
+# Route ajoutée : POST /api/participations/[id]/use-clue
+# À exécuter avant complete-step si tu veux tester la pénalité.
+POST {{host}}/api/participations/{{mainParticipationId}}/use-clue
+Content-Type: application/json
+
+{
+  "stepId": "{{mainStep1Id}}"
+}
+
+###
+# @name PARTICIPATIONS_COMPLETE_STEP
+POST {{host}}/api/participations/{{mainParticipationId}}/complete-step
+Content-Type: application/json
+
+{
+  "stepId": "{{mainStep1Id}}"
+}
+
+###
+# @name PARTICIPATIONS_FINISH
+# Route ajoutée : POST /api/participations/[id]/finish
+# finishParticipationId a déjà toutes ses étapes complétées mais reste IN_PROGRESS.
+POST {{host}}/api/participations/{{finishParticipationId}}/finish
+Content-Type: application/json
+
+{}
+
+###
+# @name PARTICIPATIONS_COMPLETE_STEP_SECOND
+# Optionnel : à lancer après avoir terminé la première step, pour la step 2 de la participation principale.
+POST {{host}}/api/participations/{{mainParticipationId}}/complete-step
+Content-Type: application/json
+
+{
+  "stepId": "{{mainStep2Id}}"
 }

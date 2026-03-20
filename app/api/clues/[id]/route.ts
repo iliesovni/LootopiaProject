@@ -52,68 +52,134 @@ export async function GET(
 
 export async function PATCH(
     request: NextRequest,
-    { params }: RouteContext
+    context: { params: Promise<{ id: string }> }
 ) {
     try {
-        const { id } = await params;
+        const { id } = await context.params;
         const body = await request.json();
-        const data = updateClueSchema.parse(body);
 
-        const existingClue = await prisma.clue.findUnique({
-            where: { id },
-        });
+        const validation = updateClueSchema.safeParse(body);
 
-        if (!existingClue) {
+        if (!validation.success) {
             return NextResponse.json(
                 {
-                    ok: false,
-                    message: "Indice introuvable.",
-                },
-                { status: 404 }
-            );
-        }
-
-        const updatedClue = await prisma.clue.update({
-            where: { id },
-            data,
-        });
-
-        return NextResponse.json({
-            ok: true,
-            message: "Indice mis à jour avec succès.",
-            clue: updatedClue,
-        });
-    } catch (error) {
-        console.error("PATCH /api/clues/[id] error:", error);
-
-        if (error instanceof ZodError) {
-            return NextResponse.json(
-                {
-                    ok: false,
-                    message: "Données invalides.",
-                    errors: z.flattenError(error),
+                    error: "Payload invalide.",
+                    details: validation.error.issues,
                 },
                 { status: 400 }
             );
         }
 
-        if (error instanceof Prisma.PrismaClientKnownRequestError) {
-            if (error.code === "P2002") {
-                return NextResponse.json(
-                    {
-                        ok: false,
-                        message: "Un indice avec ce numéro d'ordre existe déjà pour cette étape.",
-                    },
-                    { status: 400 }
-                );
+        const updatedClue = await prisma.$transaction(async (tx) => {
+            const existingClue = await tx.clue.findUnique({
+                where: { id },
+                select: {
+                    id: true,
+                    stepId: true,
+                    orderIndex: true,
+                },
+            });
+
+            if (!existingClue) {
+                throw new Error("CLUE_NOT_FOUND");
             }
+
+            const { orderIndex, ...otherUpdates } = validation.data;
+
+            if (orderIndex === undefined || orderIndex === existingClue.orderIndex) {
+                return await tx.clue.update({
+                    where: { id },
+                    data: otherUpdates,
+                    include: clueInclude,
+                });
+            }
+
+            const cluesCount = await tx.clue.count({
+                where: { stepId: existingClue.stepId },
+            });
+
+            const targetOrderIndex = Math.min(
+                Math.max(orderIndex, 1),
+                cluesCount
+            );
+
+            await tx.clue.update({
+                where: { id },
+                data: {
+                    orderIndex: 0,
+                },
+            });
+
+            if (targetOrderIndex < existingClue.orderIndex) {
+                await tx.clue.updateMany({
+                    where: {
+                        stepId: existingClue.stepId,
+                        orderIndex: {
+                            gte: targetOrderIndex,
+                            lt: existingClue.orderIndex,
+                        },
+                    },
+                    data: {
+                        orderIndex: {
+                            increment: 1,
+                        },
+                    },
+                });
+            }
+
+            if (targetOrderIndex > existingClue.orderIndex) {
+                await tx.clue.updateMany({
+                    where: {
+                        stepId: existingClue.stepId,
+                        orderIndex: {
+                            gt: existingClue.orderIndex,
+                            lte: targetOrderIndex,
+                        },
+                    },
+                    data: {
+                        orderIndex: {
+                            decrement: 1,
+                        },
+                    },
+                });
+            }
+
+            return await tx.clue.update({
+                where: { id },
+                data: {
+                    ...otherUpdates,
+                    orderIndex: targetOrderIndex,
+                },
+                include: clueInclude,
+            });
+        });
+
+        return NextResponse.json({
+            message: "Indice mis à jour avec succès.",
+            data: updatedClue,
+        });
+    } catch (error) {
+        if (error instanceof Error && error.message === "CLUE_NOT_FOUND") {
+            return NextResponse.json(
+                { error: "Indice introuvable." },
+                { status: 404 }
+            );
         }
 
+        if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2025"
+        ) {
+            return NextResponse.json(
+                { error: "Indice introuvable." },
+                { status: 404 }
+            );
+        }
+
+        console.error("[UPDATE_CLUE_ERROR]", error);
+
         return NextResponse.json(
-            {
-                ok: false,
-                message: "Erreur lors de la mise à jour de l'indice.",
-            },
+            { error: "Erreur serveur." },
             { status: 500 }
         );
     }
