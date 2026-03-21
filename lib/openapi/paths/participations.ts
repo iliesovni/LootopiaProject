@@ -1,35 +1,132 @@
+import {
+    CompleteStepResponseSchema,
+    ErrorResponseSchema,
+    ParticipationFinishResponseSchema,
+    ParticipationResponseSchema,
+    ParticipationStartResponseSchema,
+    UseClueResponseSchema,
+    uuidParam,
+    ValidationErrorResponseSchema,
+} from "@/lib/openapi/components";
 import { registry } from "@/lib/openapi/registry";
-import { completeStepSchema } from "@/schemas/participation";
+import { completeStepSchema, startParticipationSchema, useClueSchema } from "@/schemas/participation";
 import { z } from "zod";
 
-const participationIdParam = z.uuid().openapi({
-    param: {
-        name: "id",
-        in: "path",
-        required: true,
-        description: "Identifiant de la participation",
-    },
-    example: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1",
-});
+const participationIdParam = uuidParam("id", "Identifiant de la participation");
 
-const completeStepResponseSchema = z
-.object({
-    message: z.string().openapi({ example: "Étape complétée avec succès." }),
-    data: z.object({
-        participationId: z.uuid(),
-        stepId: z.uuid(),
-        pointsEarned: z.number().int(),
-        totalScore: z.number().int(),
-    }),
-})
-.openapi("CompleteStepResponse");
+const StartParticipationRequestSchema = startParticipationSchema.openapi("StartParticipationRequest");
+const CompleteStepRequestSchema = completeStepSchema.openapi("CompleteStepRequest");
+const UseClueRequestSchema = useClueSchema.openapi("UseClueRequest");
 
 registry.registerPath({
     method: "post",
-    path: "/api/participations/{id}/complete-step",
+    path: "/api/participations/start",
     tags: ["Participations"],
-    summary: "Compléter une étape",
-    description: "Marque une étape comme complétée et met à jour le score.",
+    summary: "Démarrer une participation",
+    request: {
+        body: {
+            content: {
+                "application/json": {
+                    schema: StartParticipationRequestSchema,
+                },
+            },
+        },
+    },
+    responses: {
+        201: {
+            description: "Participation démarrée.",
+            content: {
+                "application/json": {
+                    schema: ParticipationStartResponseSchema,
+                },
+            },
+        },
+        400: {
+            description: "Payload invalide ou relation invalide.",
+            content: {
+                "application/json": {
+                    schema: z.union([ValidationErrorResponseSchema, ErrorResponseSchema]),
+                },
+            },
+        },
+        403: {
+            description: "Utilisateur non autorisé ou chasse non accessible.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+        404: {
+            description: "Utilisateur ou chasse introuvable.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+        409: {
+            description: "Participation déjà existante.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+        500: {
+            description: "Erreur serveur.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+    },
+});
+
+registry.registerPath({
+    method: "get",
+    path: "/api/participations/{id}",
+    tags: ["Participations"],
+    summary: "Récupérer une participation",
+    request: {
+        params: z.object({
+            id: participationIdParam,
+        }),
+    },
+    responses: {
+        200: {
+            description: "Participation trouvée.",
+            content: {
+                "application/json": {
+                    schema: ParticipationResponseSchema,
+                },
+            },
+        },
+        404: {
+            description: "Participation introuvable.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+        500: {
+            description: "Erreur serveur.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+    },
+});
+
+registry.registerPath({
+    method: "post",
+    path: "/api/participations/{id}/use-clue",
+    tags: ["Participations"],
+    summary: "Utiliser un indice",
     request: {
         params: z.object({
             id: participationIdParam,
@@ -37,28 +134,158 @@ registry.registerPath({
         body: {
             content: {
                 "application/json": {
-                    schema: completeStepSchema,
+                    schema: UseClueRequestSchema,
                 },
             },
         },
     },
     responses: {
         200: {
-            description: "Étape complétée avec succès.",
+            description: "Indice utilisé.",
             content: {
                 "application/json": {
-                    schema: completeStepResponseSchema,
+                    schema: UseClueResponseSchema,
                 },
             },
         },
         400: {
             description: "Payload invalide.",
+            content: {
+                "application/json": {
+                    schema: ValidationErrorResponseSchema,
+                },
+            },
         },
         404: {
             description: "Participation ou étape introuvable.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+        409: {
+            description: "Conflit métier : étape hors ordre, déjà complétée, plus d'indice disponible, etc.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+        500: {
+            description: "Erreur serveur.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+    },
+});
+
+registry.registerPath({
+    method: "post",
+    path: "/api/participations/{id}/complete-step",
+    tags: ["Participations"],
+    summary: "Compléter une étape",
+    request: {
+        params: z.object({
+            id: participationIdParam,
+        }),
+        body: {
+            content: {
+                "application/json": {
+                    schema: CompleteStepRequestSchema,
+                },
+            },
+        },
+    },
+    responses: {
+        200: {
+            description: "Étape complétée.",
+            content: {
+                "application/json": {
+                    schema: CompleteStepResponseSchema,
+                },
+            },
+        },
+        400: {
+            description: "Payload invalide.",
+            content: {
+                "application/json": {
+                    schema: ValidationErrorResponseSchema,
+                },
+            },
+        },
+        404: {
+            description: "Participation ou étape introuvable.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
         },
         409: {
             description: "Conflit métier.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+        500: {
+            description: "Erreur serveur.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+    },
+});
+
+registry.registerPath({
+    method: "post",
+    path: "/api/participations/{id}/finish",
+    tags: ["Participations"],
+    summary: "Terminer une participation",
+    request: {
+        params: z.object({
+            id: participationIdParam,
+        }),
+    },
+    responses: {
+        200: {
+            description: "Participation terminée.",
+            content: {
+                "application/json": {
+                    schema: ParticipationFinishResponseSchema,
+                },
+            },
+        },
+        404: {
+            description: "Participation introuvable.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+        409: {
+            description: "Participation non terminable dans l'état courant.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+        500: {
+            description: "Erreur serveur.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
         },
     },
 });

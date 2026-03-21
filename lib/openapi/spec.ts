@@ -1,4 +1,9 @@
 import "@/lib/openapi/setup";
+
+import "@/lib/openapi/components";
+import "@/lib/openapi/paths/clues";
+import "@/lib/openapi/paths/hunts";
+import "@/lib/openapi/paths/steps";
 import "@/lib/openapi/paths/participations";
 import { registry } from "@/lib/openapi/registry";
 
@@ -16,6 +21,13 @@ export const swaggerSpec = new OpenApiGeneratorV3(
     servers: [
         {
             url: "http://localhost:3000",
+            description: "Serveur local",
         },
+    ],
+    tags: [
+        { name: "Hunts", description: "Gestion des chasses" },
+        { name: "Steps", description: "Gestion des étapes" },
+        { name: "Clues", description: "Gestion des indices" },
+        { name: "Participations", description: "Gestion des participations joueur" },
     ],
 });
