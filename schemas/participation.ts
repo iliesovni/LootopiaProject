@@ -8,3 +8,7 @@ export const startParticipationSchema = z.object({
 export const completeStepSchema = z.object({
     stepId: z.uuid("L'identifiant de l'étape doit être un UUID valide."),
 });
+
+export const useClueSchema = z.object({
+    stepId: z.uuid("L'identifiant de l'étape doit être un UUID valide."),
+});

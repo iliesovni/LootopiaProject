@@ -1,9 +1,9 @@
-import {NextRequest, NextResponse} from "next/server";
-import { prisma } from "@/lib/prisma";
+import { huntInclude } from "@/lib/db/includes/hunt.include";
+import { prisma } from "@/lib/db/prisma";
 import { createHuntSchema } from "@/schemas/hunt";
-import { z, ZodError } from "zod";
 import { Prisma } from "@prisma/client";
-import { huntInclude } from "@/lib/prisma-includes";
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 export async function GET() {
     try {
@@ -13,20 +13,23 @@ export async function GET() {
                 createdAt: "desc",
             },
         });
+
         return NextResponse.json({
-            ok: true,
-            count: hunts.length,
-            hunts,
+            message: "Chasses récupérées avec succès.",
+            data: {
+                count: hunts.length,
+                items: hunts,
+            },
         });
     } catch (error) {
         console.error("GET /api/hunts error:", error);
 
         return NextResponse.json(
             {
-                ok: false,
                 message: "Erreur lors de la récupération des chasses.",
+                error: "INTERNAL_SERVER_ERROR",
             },
-            { status: 500 }
+            { status: 500 },
         );
     }
 }
@@ -34,53 +37,55 @@ export async function GET() {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const data = createHuntSchema.parse(body);
+
+        const validation = createHuntSchema.safeParse(body);
+
+        if (!validation.success) {
+            return NextResponse.json(
+                {
+                    message: "Payload invalide.",
+                    error: "VALIDATION_ERROR",
+                    data: {
+                        details: z.flattenError(validation.error),
+                    },
+                },
+                { status: 400 },
+            );
+        }
 
         const hunt = await prisma.hunt.create({
-            data,
+            data: validation.data,
+            include: huntInclude,
         });
 
         return NextResponse.json(
             {
-                ok: true,
                 message: "Chasse créée avec succès.",
-                hunt,
+                data: hunt,
             },
-            { status: 201 }
+            { status: 201 },
         );
     } catch (error) {
         console.error("POST /api/hunts error:", error);
-
-        if (error instanceof ZodError) {
-            return NextResponse.json(
-                {
-                    ok: false,
-                    message: "Données invalides.",
-                    errors: z.flattenError(error),
-                },
-                { status: 400 }
-            );
-        }
 
         if (error instanceof Prisma.PrismaClientKnownRequestError) {
             if (error.code === "P2003") {
                 return NextResponse.json(
                     {
-                        ok: false,
-                        message: "Le créateur indiqué n'existe pas.",
+                        message: "Une relation fournie est invalide.",
+                        error: "INVALID_REFERENCE_ID",
                     },
-                    { status: 400 }
+                    { status: 400 },
                 );
             }
         }
 
         return NextResponse.json(
             {
-                ok: false,
                 message: "Erreur lors de la création de la chasse.",
+                error: "INTERNAL_SERVER_ERROR",
             },
-            { status: 500 }
+            { status: 500 },
         );
     }
 }
-

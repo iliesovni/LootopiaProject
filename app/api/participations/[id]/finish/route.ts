@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { participationInclude } from "@/lib/prisma-includes";
+import { participationInclude } from "@/lib/db/includes/participation.include";
+import { prisma } from "@/lib/db/prisma";
 import { ParticipationStatus } from "@prisma/client";
+import { NextResponse } from "next/server";
 
 export async function POST(
     _request: Request,
-    context: { params: Promise<{ id: string }> }
+    context: { params: Promise<{ id: string }> },
 ) {
     try {
         const { id } = await context.params;
@@ -17,26 +17,35 @@ export async function POST(
 
         if (!participation) {
             return NextResponse.json(
-                { error: "Participation introuvable." },
-                { status: 404 }
+                {
+                    message: "Participation introuvable.",
+                    error: "PARTICIPATION_NOT_FOUND",
+                },
+                { status: 404 },
             );
         }
 
         if (participation.status !== ParticipationStatus.IN_PROGRESS) {
             return NextResponse.json(
-                { error: "La participation n'est pas en cours." },
-                { status: 409 }
+                {
+                    message: "La participation n'est pas en cours.",
+                    error: "PARTICIPATION_NOT_IN_PROGRESS",
+                },
+                { status: 409 },
             );
         }
 
         const hasRemainingSteps = participation.stepProgress.some(
-            (progress) => !progress.isCompleted
+            (progress) => !progress.isCompleted,
         );
 
         if (hasRemainingSteps) {
             return NextResponse.json(
-                { error: "Toutes les étapes doivent être complétées avant de terminer la participation." },
-                { status: 409 }
+                {
+                    message: "Toutes les étapes doivent être complétées avant de terminer la participation.",
+                    error: "PARTICIPATION_HAS_REMAINING_STEPS",
+                },
+                { status: 409 },
             );
         }
 
@@ -57,8 +66,11 @@ export async function POST(
         console.error("[FINISH_PARTICIPATION_ERROR]", error);
 
         return NextResponse.json(
-            { error: "Erreur serveur." },
-            { status: 500 }
+            {
+                message: "Erreur serveur.",
+                error: "INTERNAL_SERVER_ERROR",
+            },
+            { status: 500 },
         );
     }
 }

@@ -1,9 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { stepInclude } from "@/lib/db/includes/step.include";
+import { prisma } from "@/lib/db/prisma";
 import { updateStepSchema } from "@/schemas/step";
-import { z, ZodError } from "zod";
-import {Prisma} from "@prisma/client";
-import { stepInclude } from "@/lib/prisma-includes";
+import { Prisma } from "@prisma/client";
+import { NextRequest, NextResponse } from "next/server";
 
 type RouteContext = {
     params: Promise<{
@@ -13,7 +12,7 @@ type RouteContext = {
 
 export async function GET(
     _request: NextRequest,
-    { params }: RouteContext
+    { params }: RouteContext,
 ) {
     try {
         const { id } = await params;
@@ -26,33 +25,33 @@ export async function GET(
         if (!step) {
             return NextResponse.json(
                 {
-                    ok: false,
                     message: "Étape introuvable.",
+                    error: "STEP_NOT_FOUND",
                 },
-                { status: 404 }
+                { status: 404 },
             );
         }
 
         return NextResponse.json({
-            ok: true,
-            step,
+            message: "Étape récupérée",
+            data: step,
         });
     } catch (error) {
         console.error("GET /api/steps/[id] error:", error);
 
         return NextResponse.json(
             {
-                ok: false,
                 message: "Erreur lors de la récupération de l'étape.",
+                error: "INTERNAL_SERVER_ERROR",
             },
-            { status: 500 }
+            { status: 500 },
         );
     }
 }
 
 export async function PATCH(
     request: NextRequest,
-    context: { params: Promise<{ id: string }> }
+    context: { params: Promise<{ id: string }> },
 ) {
     try {
         const { id } = await context.params;
@@ -63,10 +62,13 @@ export async function PATCH(
         if (!validation.success) {
             return NextResponse.json(
                 {
-                    error: "Payload invalide.",
-                    details: validation.error.issues,
+                    message: "Payload invalide.",
+                    error: "VALIDATION_ERROR",
+                    data: {
+                        details: validation.error.issues,
+                    },
                 },
-                { status: 400 }
+                { status: 400 },
             );
         }
 
@@ -102,7 +104,7 @@ export async function PATCH(
 
             const targetOrderIndex = Math.min(
                 Math.max(orderIndex, 1),
-                stepsCount
+                stepsCount,
             );
 
             // On déplace temporairement la step hors de la plage pour éviter un conflit unique
@@ -166,8 +168,11 @@ export async function PATCH(
     } catch (error) {
         if (error instanceof Error && error.message === "STEP_NOT_FOUND") {
             return NextResponse.json(
-                { error: "Étape introuvable." },
-                { status: 404 }
+                {
+                    message: "Étape introuvable.",
+                    error: "STEP_NOT_FOUND",
+                },
+                { status: 404 },
             );
         }
 
@@ -176,47 +181,73 @@ export async function PATCH(
             error.code === "P2025"
         ) {
             return NextResponse.json(
-                { error: "Étape introuvable." },
-                { status: 404 }
+                {
+                    message: "Étape introuvable.",
+                    error: "STEP_NOT_FOUND",
+                },
+                { status: 404 },
             );
         }
 
         console.error("[UPDATE_STEP_ERROR]", error);
 
         return NextResponse.json(
-            { error: "Erreur serveur." },
-            { status: 500 }
+            {
+                message: "Erreur lors de la mise à jour de l'étape.",
+                error: "INTERNAL_SERVER_ERROR",
+            },
+            { status: 500 },
         );
     }
 }
 
 export async function DELETE(
     _request: NextRequest,
-    { params }: RouteContext
+    { params }: RouteContext,
 ) {
     try {
         const { id } = await params;
 
         const existingStep = await prisma.step.findUnique({
             where: { id },
+            select: {
+                id: true,
+                huntId: true,
+                orderIndex: true,
+            },
         });
 
         if (!existingStep) {
             return NextResponse.json(
                 {
-                    ok: false,
                     message: "Étape introuvable.",
+                    error: "STEP_NOT_FOUND",
                 },
-                { status: 404 }
+                { status: 404 },
             );
         }
 
-        await prisma.step.delete({
-            where: { id },
+        await prisma.$transaction(async (tx) => {
+            await tx.step.delete({
+                where: { id },
+            });
+
+            await tx.step.updateMany({
+                where: {
+                    huntId: existingStep.huntId,
+                    orderIndex: {
+                        gt: existingStep.orderIndex,
+                    },
+                },
+                data: {
+                    orderIndex: {
+                        decrement: 1,
+                    },
+                },
+            });
         });
 
         return NextResponse.json({
-            ok: true,
             message: "Étape supprimée avec succès.",
         });
     } catch (error) {
@@ -224,10 +255,10 @@ export async function DELETE(
 
         return NextResponse.json(
             {
-                ok: false,
                 message: "Erreur lors de la suppression de l'étape.",
+                error: "INTERNAL_SERVER_ERROR",
             },
-            { status: 500 }
+            { status: 500 },
         );
     }
 }

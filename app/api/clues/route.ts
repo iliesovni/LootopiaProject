@@ -1,8 +1,8 @@
-import {NextRequest, NextResponse} from "next/server";
-import { prisma } from "@/lib/prisma";
-import { clueInclude } from "@/lib/prisma-includes";
-import {createClueSchema, updateClueSchema} from "@/schemas/clue";
-import {Prisma} from "@prisma/client";
+import { clueInclude } from "@/lib/db/includes/clue.include";
+import { prisma } from "@/lib/db/prisma";
+import { createClueSchema } from "@/schemas/clue";
+import { Prisma } from "@prisma/client";
+import { NextRequest, NextResponse } from "next/server";
 
 export async function GET() {
     try {
@@ -12,19 +12,21 @@ export async function GET() {
         });
 
         return NextResponse.json({
-            ok: true,
-            count: clues.length,
-            clues,
+            message: "Indices récupérés avec succès.",
+            data: {
+                count: clues.length,
+                items: clues,
+            },
         });
     } catch (error) {
         console.error("GET /api/clues error:", error);
 
         return NextResponse.json(
             {
-                ok: false,
                 message: "Erreur lors de la récupération des indices.",
+                error: "INTERNAL_SERVER_ERROR",
             },
-            { status: 500 }
+            { status: 500 },
         );
     }
 }
@@ -38,10 +40,13 @@ export async function POST(request: NextRequest) {
         if (!validation.success) {
             return NextResponse.json(
                 {
-                    error: "Payload invalide.",
-                    details: validation.error.issues,
+                    message: "Payload invalide.",
+                    error: "VALIDATION_ERROR",
+                    data: {
+                        details: validation.error.issues,
+                    },
                 },
-                { status: 400 }
+                { status: 400 },
             );
         }
 
@@ -77,7 +82,7 @@ export async function POST(request: NextRequest) {
                 });
 
                 if (existingClueAtSameIndex) {
-                    throw new Error("ORDER_INDEX_ALREADY_EXISTS");
+                    throw new Error("CLUE_ORDER_CONFLICT");
                 }
             }
 
@@ -97,21 +102,27 @@ export async function POST(request: NextRequest) {
                 message: "Indice créé avec succès.",
                 data: createdClue,
             },
-            { status: 201 }
+            { status: 201 },
         );
     } catch (error) {
         if (error instanceof Error) {
             if (error.message === "STEP_NOT_FOUND") {
                 return NextResponse.json(
-                    { error: "Step introuvable." },
-                    { status: 404 }
+                    {
+                        message: "Step introuvable.",
+                        error: "STEP_NOT_FOUND",
+                    },
+                    { status: 404 },
                 );
             }
 
-            if (error.message === "ORDER_INDEX_ALREADY_EXISTS") {
+            if (error.message === "CLUE_ORDER_CONFLICT") {
                 return NextResponse.json(
-                    { error: "Un indice existe déjà à cet ordre pour cette étape." },
-                    { status: 409 }
+                    {
+                        message: "Un indice existe déjà à cet ordre pour cette étape.",
+                        error: "CLUE_ORDER_CONFLICT",
+                    },
+                    { status: 409 },
                 );
             }
         }
@@ -121,16 +132,22 @@ export async function POST(request: NextRequest) {
             error.code === "P2003"
         ) {
             return NextResponse.json(
-                { error: "La step fournie est invalide." },
-                { status: 400 }
+                {
+                    message: "La step fournie est invalide.",
+                    error: "INVALID_STEP_ID",
+                },
+                { status: 400 },
             );
         }
 
         console.error("[CREATE_CLUE_ERROR]", error);
 
         return NextResponse.json(
-            { error: "Erreur serveur." },
-            { status: 500 }
+            {
+                message: "Erreur lors de la création de l'indice.",
+                error: "INTERNAL_SERVER_ERROR",
+            },
+            { status: 500 },
         );
     }
 }

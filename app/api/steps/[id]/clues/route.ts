@@ -1,10 +1,10 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
+import { NextResponse } from "next/server";
 
 export async function GET(
     _request: Request,
-    context: { params: Promise<{ id: string }> }
+    context: { params: Promise<{ id: string }> },
 ) {
     try {
         const { id } = await context.params;
@@ -19,10 +19,10 @@ export async function GET(
         if (!step) {
             return NextResponse.json(
                 {
-                    ok: false,
                     message: "Étape introuvable.",
+                    error: "STEP_NOT_FOUND",
                 },
-                { status: 404 }
+                { status: 404 },
             );
         }
 
@@ -44,9 +44,11 @@ export async function GET(
         });
 
         return NextResponse.json({
-            ok: true,
-            count: clues.length,
-            clues,
+            message: "Indices de l'étape récupérés avec succès.",
+            data: {
+                count: clues.length,
+                items: clues,
+            },
         });
     } catch (error) {
         console.error("GET /api/steps/[id]/clues error:", error);
@@ -54,19 +56,19 @@ export async function GET(
         if (error instanceof Prisma.PrismaClientKnownRequestError) {
             return NextResponse.json(
                 {
-                    ok: false,
                     message: "Erreur base de données lors de la récupération des indices.",
+                    error: "INTERNAL_SERVER_ERROR",
                 },
-                { status: 500 }
+                { status: 500 },
             );
         }
 
         return NextResponse.json(
             {
-                ok: false,
                 message: "Erreur lors de la récupération des indices.",
+                error: "INTERNAL_SERVER_ERROR",
             },
-            { status: 500 }
+            { status: 500 },
         );
     }
 }

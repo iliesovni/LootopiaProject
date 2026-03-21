@@ -1,6 +1,6 @@
+import { stepInclude } from "@/lib/db/includes/step.include";
+import { prisma } from "@/lib/db/prisma";
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { stepInclude } from "@/lib/prisma-includes";
 
 export async function GET() {
     try {
@@ -10,19 +10,21 @@ export async function GET() {
         });
 
         return NextResponse.json({
-            ok: true,
-            count: steps.length,
-            steps,
+            message: "Les étapes ont été récupérées",
+            data: {
+                count: steps.length,
+                items: steps,
+            },
         });
     } catch (error) {
         console.error("GET /api/steps error:", error);
 
         return NextResponse.json(
             {
-                ok: false,
                 message: "Erreur lors de la récupération des étapes.",
+                error: "INTERNAL_SERVER_ERROR",
             },
-            { status: 500 }
+            { status: 500 },
         );
     }
 }

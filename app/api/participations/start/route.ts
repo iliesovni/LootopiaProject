@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { Prisma, ParticipationStatus } from "@prisma/client";
-import { z, ZodError } from "zod";
-import { prisma } from "@/lib/prisma";
-import { participationInclude } from "@/lib/prisma-includes";
+import { participationInclude } from "@/lib/db/includes/participation.include";
+import { prisma } from "@/lib/db/prisma";
 import { startParticipationSchema } from "@/schemas/participation";
+import { ParticipationStatus, Prisma } from "@prisma/client";
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 class ParticipationStartError extends Error {
     constructor(code: string) {
@@ -13,71 +13,60 @@ class ParticipationStartError extends Error {
 }
 
 function buildErrorResponse(error: unknown) {
-    if (error instanceof ZodError) {
-        return NextResponse.json(
-            {
-                ok: false,
-                message: "Données invalides.",
-                errors: z.flattenError(error),
-            },
-            { status: 400 }
-        );
-    }
-
     if (error instanceof ParticipationStartError) {
         switch (error.message) {
             case "USER_NOT_FOUND":
                 return NextResponse.json(
                     {
-                        ok: false,
                         message: "Utilisateur introuvable.",
+                        error: "USER_NOT_FOUND",
                     },
-                    { status: 404 }
+                    { status: 404 },
                 );
 
             case "USER_NOT_PLAYER":
                 return NextResponse.json(
                     {
-                        ok: false,
                         message: "Seul un joueur peut démarrer une chasse.",
+                        error: "USER_NOT_PLAYER",
                     },
-                    { status: 403 }
+                    { status: 403 },
                 );
 
             case "HUNT_NOT_FOUND":
                 return NextResponse.json(
                     {
-                        ok: false,
                         message: "Chasse introuvable.",
+                        error: "HUNT_NOT_FOUND",
                     },
-                    { status: 404 }
+                    { status: 404 },
                 );
 
             case "HUNT_NOT_PUBLIC":
                 return NextResponse.json(
                     {
-                        ok: false,
                         message: "Cette chasse n'est pas accessible publiquement.",
+                        error: "HUNT_NOT_PUBLIC",
                     },
-                    { status: 403 }
+                    { status: 403 },
                 );
 
             case "HUNT_HAS_NO_STEPS":
                 return NextResponse.json(
                     {
-                        ok: false,
                         message: "Impossible de démarrer une chasse sans étapes.",
+                        error: "HUNT_HAS_NO_STEPS",
                     },
-                    { status: 400 }
+                    { status: 400 },
                 );
 
             case "PARTICIPATION_ALREADY_EXISTS":
                 return NextResponse.json(
                     {
-                        ok: false,
                         message: "Ce joueur a déjà une participation pour cette chasse.",
+                        error: "PARTICIPATION_ALREADY_EXISTS",
                     },
-                    { status: 409 }
+                    { status: 409 },
                 );
         }
     }
@@ -86,34 +75,38 @@ function buildErrorResponse(error: unknown) {
         if (error.code === "P2002") {
             return NextResponse.json(
                 {
-                    ok: false,
                     message: "Cette participation existe déjà.",
+                    error: "PARTICIPATION_ALREADY_EXISTS",
                 },
-                { status: 409 }
+                { status: 409 },
             );
         }
 
         if (error.code === "P2003") {
             return NextResponse.json(
                 {
-                    ok: false,
                     message: "Relation invalide lors du démarrage de la participation.",
+                    error: "INVALID_RELATION",
                 },
-                { status: 400 }
+                { status: 400 },
             );
         }
     }
 
     return NextResponse.json(
         {
-            ok: false,
             message: "Erreur lors du démarrage de la participation.",
+            error: "INTERNAL_SERVER_ERROR",
         },
-        { status: 500 }
+        { status: 500 },
     );
 }
 
-async function validateStartParticipation(tx: Prisma.TransactionClient, userId: string, huntId: string) {
+async function validateStartParticipation(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    huntId: string,
+) {
     const user = await tx.user.findUnique({
         where: { id: userId },
         select: {
@@ -182,7 +175,7 @@ async function createParticipationWithProgress(
     tx: Prisma.TransactionClient,
     userId: string,
     huntId: string,
-    stepIds: string[]
+    stepIds: string[],
 ) {
     const participation = await tx.participation.create({
         data: {
@@ -213,7 +206,23 @@ async function createParticipationWithProgress(
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { userId, huntId } = startParticipationSchema.parse(body);
+
+        const validation = startParticipationSchema.safeParse(body);
+
+        if (!validation.success) {
+            return NextResponse.json(
+                {
+                    message: "Payload invalide.",
+                    error: "VALIDATION_ERROR",
+                    data: {
+                        details: z.flattenError(validation.error),
+                    },
+                },
+                { status: 400 },
+            );
+        }
+
+        const { userId, huntId } = validation.data;
 
         const participation = await prisma.$transaction(async (tx) => {
             const hunt = await validateStartParticipation(tx, userId, huntId);
@@ -222,17 +231,16 @@ export async function POST(request: NextRequest) {
                 tx,
                 userId,
                 huntId,
-                hunt.steps.map((step) => step.id)
+                hunt.steps.map((step) => step.id),
             );
         });
 
         return NextResponse.json(
             {
-                ok: true,
                 message: "Participation démarrée avec succès.",
-                participation,
+                data: participation,
             },
-            { status: 201 }
+            { status: 201 },
         );
     } catch (error) {
         console.error("POST /api/participations/start error:", error);

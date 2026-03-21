@@ -1,11 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { apiValidationError } from "@/lib/api/validation";
+import { participationProgressInclude } from "@/lib/db/includes/participation.include";
+import { prisma } from "@/lib/db/prisma";
+import { getTargetStepProgress, mapParticipationError } from "@/lib/services/participation.service";
 import { completeStepSchema } from "@/schemas/participation";
-import { participationProgressInclude } from "@/lib/prisma-includes";
+import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(
     request: NextRequest,
-    context: { params: Promise<{ id: string }> }
+    context: { params: Promise<{ id: string }> },
 ) {
     const logContext: {
         participationId: string | null;
@@ -16,8 +18,7 @@ export async function POST(
     };
 
     try {
-        const params = await context.params;
-        const id = params.id;
+        const { id } = await context.params;
         logContext.participationId = id;
 
         const body = await request.json();
@@ -25,16 +26,10 @@ export async function POST(
         const validation = completeStepSchema.safeParse(body);
 
         if (!validation.success) {
-            return NextResponse.json(
-                {
-                    error: "Payload invalide.",
-                    details: validation.error.issues,
-                },
-                { status: 400 }
-            );
+            return apiValidationError(validation.error);
         }
 
-        const stepId = validation.data.stepId;
+        const { stepId } = validation.data;
         logContext.stepId = stepId;
 
         const participation = await prisma.participation.findUnique({
@@ -44,72 +39,37 @@ export async function POST(
 
         if (!participation) {
             return NextResponse.json(
-                { error: "Participation introuvable." },
-                { status: 404 }
+                {
+                    message: "Participation introuvable.",
+                    error: "PARTICIPATION_NOT_FOUND",
+                },
+                { status: 404 },
             );
         }
 
-        if (participation.status !== "IN_PROGRESS") {
-            return NextResponse.json(
-                { error: "La participation n'est pas en cours." },
-                { status: 409 }
-            );
-        }
-
-        const targetProgress = participation.stepProgress.find(
-            (progress) => progress.stepId === stepId
-        );
-
-        if (!targetProgress) {
-            return NextResponse.json(
-                { error: "Cette étape n'appartient pas à la participation." },
-                { status: 404 }
-            );
-        }
-
-        if (!targetProgress.step) {
-            return NextResponse.json(
-                { error: "Step mal configurée." },
-                { status: 500 }
-            );
-        }
-
-        if (targetProgress.isCompleted) {
-            return NextResponse.json(
-                { error: "Cette étape est déjà complétée." },
-                { status: 409 }
-            );
-        }
-
-        const nextExpectedProgress = participation.stepProgress.find(
-            (progress) => !progress.isCompleted
-        );
-
-        if (!nextExpectedProgress || nextExpectedProgress.stepId !== stepId) {
-            return NextResponse.json(
-                { error: "Cette étape ne peut pas être complétée maintenant." },
-                { status: 409 }
-            );
-        }
+        const targetProgress = getTargetStepProgress(participation, stepId);
+        const clues = targetProgress.step.clues;
 
         const safeCluesUsed = Math.min(
             targetProgress.cluesUsed,
-            targetProgress.step.clues.length
+            clues.length,
         );
 
-        const clues = targetProgress.step.clues;
-
         const penalties = clues
-            .slice(0, safeCluesUsed)
-            .reduce((sum, clue) => sum + clue.penaltyPoints, 0);
+        .slice(0, safeCluesUsed)
+        .reduce(
+            (sum: number, clue: { penaltyPoints: number }) =>
+                sum + clue.penaltyPoints,
+            0,
+        );
 
         const pointsEarned = Math.max(
             0,
-            targetProgress.step.pointsReward - penalties
+            targetProgress.step.pointsReward - penalties,
         );
 
         const result = await prisma.$transaction(async (tx) => {
-            const updatedStepProgress = await tx.stepProgress.update({
+            await tx.stepProgress.update({
                 where: {
                     participationId_stepId: {
                         participationId: participation.id,
@@ -133,7 +93,6 @@ export async function POST(
             });
 
             return {
-                updatedStepProgress,
                 updatedParticipation,
             };
         });
@@ -148,14 +107,22 @@ export async function POST(
             },
         });
     } catch (error) {
+        const mappedError = mapParticipationError(error);
+        if (mappedError) {
+            return mappedError;
+        }
+
         console.error("[COMPLETE_STEP_ERROR]", {
             ...logContext,
             error,
         });
 
         return NextResponse.json(
-            { error: "Erreur serveur." },
-            { status: 500 }
+            {
+                message: "Erreur serveur.",
+                error: "INTERNAL_SERVER_ERROR",
+            },
+            { status: 500 },
         );
     }
 }

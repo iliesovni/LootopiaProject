@@ -1,9 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { clueInclude } from "@/lib/db/includes/clue.include";
+import { prisma } from "@/lib/db/prisma";
 import { updateClueSchema } from "@/schemas/clue";
-import { z, ZodError } from "zod";
-import {Prisma} from "@prisma/client";
-import { clueInclude } from "@/lib/prisma-includes";
+import { Prisma } from "@prisma/client";
+import { NextRequest, NextResponse } from "next/server";
 
 type RouteContext = {
     params: Promise<{
@@ -13,7 +12,7 @@ type RouteContext = {
 
 export async function GET(
     _request: NextRequest,
-    { params }: RouteContext
+    { params }: RouteContext,
 ) {
     try {
         const { id } = await params;
@@ -26,33 +25,33 @@ export async function GET(
         if (!clue) {
             return NextResponse.json(
                 {
-                    ok: false,
                     message: "Indice introuvable.",
+                    error: "CLUE_NOT_FOUND",
                 },
-                { status: 404 }
+                { status: 404 },
             );
         }
 
         return NextResponse.json({
-            ok: true,
-            clue,
+            message: "Indice récupéré",
+            data: clue,
         });
     } catch (error) {
         console.error("GET /api/clues/[id] error:", error);
 
         return NextResponse.json(
             {
-                ok: false,
                 message: "Erreur lors de la récupération de l'indice.",
+                error: "INTERNAL_SERVER_ERROR",
             },
-            { status: 500 }
+            { status: 500 },
         );
     }
 }
 
 export async function PATCH(
     request: NextRequest,
-    context: { params: Promise<{ id: string }> }
+    context: { params: Promise<{ id: string }> },
 ) {
     try {
         const { id } = await context.params;
@@ -63,10 +62,13 @@ export async function PATCH(
         if (!validation.success) {
             return NextResponse.json(
                 {
-                    error: "Payload invalide.",
-                    details: validation.error.issues,
+                    message: "Payload invalide.",
+                    error: "VALIDATION_ERROR",
+                    data: {
+                        details: validation.error.issues,
+                    },
                 },
-                { status: 400 }
+                { status: 400 },
             );
         }
 
@@ -87,7 +89,7 @@ export async function PATCH(
             const { orderIndex, ...otherUpdates } = validation.data;
 
             if (orderIndex === undefined || orderIndex === existingClue.orderIndex) {
-                return await tx.clue.update({
+                return tx.clue.update({
                     where: { id },
                     data: otherUpdates,
                     include: clueInclude,
@@ -100,7 +102,7 @@ export async function PATCH(
 
             const targetOrderIndex = Math.min(
                 Math.max(orderIndex, 1),
-                cluesCount
+                cluesCount,
             );
 
             await tx.clue.update({
@@ -144,7 +146,7 @@ export async function PATCH(
                 });
             }
 
-            return await tx.clue.update({
+            return tx.clue.update({
                 where: { id },
                 data: {
                     ...otherUpdates,
@@ -161,8 +163,11 @@ export async function PATCH(
     } catch (error) {
         if (error instanceof Error && error.message === "CLUE_NOT_FOUND") {
             return NextResponse.json(
-                { error: "Indice introuvable." },
-                { status: 404 }
+                {
+                    message: "Indice introuvable.",
+                    error: "CLUE_NOT_FOUND",
+                },
+                { status: 404 },
             );
         }
 
@@ -171,47 +176,73 @@ export async function PATCH(
             error.code === "P2025"
         ) {
             return NextResponse.json(
-                { error: "Indice introuvable." },
-                { status: 404 }
+                {
+                    message: "Indice introuvable.",
+                    error: "CLUE_NOT_FOUND",
+                },
+                { status: 404 },
             );
         }
 
         console.error("[UPDATE_CLUE_ERROR]", error);
 
         return NextResponse.json(
-            { error: "Erreur serveur." },
-            { status: 500 }
+            {
+                message: "Erreur lors de la mise à jour de l'indice.",
+                error: "INTERNAL_SERVER_ERROR",
+            },
+            { status: 500 },
         );
     }
 }
 
 export async function DELETE(
     _request: NextRequest,
-    { params }: RouteContext
+    { params }: RouteContext,
 ) {
     try {
         const { id } = await params;
 
         const existingClue = await prisma.clue.findUnique({
             where: { id },
+            select: {
+                id: true,
+                stepId: true,
+                orderIndex: true,
+            },
         });
 
         if (!existingClue) {
             return NextResponse.json(
                 {
-                    ok: false,
                     message: "Indice introuvable.",
+                    error: "CLUE_NOT_FOUND",
                 },
-                { status: 404 }
+                { status: 404 },
             );
         }
 
-        await prisma.clue.delete({
-            where: { id },
+        await prisma.$transaction(async (tx) => {
+            await tx.clue.delete({
+                where: { id },
+            });
+
+            await tx.clue.updateMany({
+                where: {
+                    stepId: existingClue.stepId,
+                    orderIndex: {
+                        gt: existingClue.orderIndex,
+                    },
+                },
+                data: {
+                    orderIndex: {
+                        decrement: 1,
+                    },
+                },
+            });
         });
 
         return NextResponse.json({
-            ok: true,
             message: "Indice supprimé avec succès.",
         });
     } catch (error) {
@@ -219,10 +250,10 @@ export async function DELETE(
 
         return NextResponse.json(
             {
-                ok: false,
                 message: "Erreur lors de la suppression de l'indice.",
+                error: "INTERNAL_SERVER_ERROR",
             },
-            { status: 500 }
+            { status: 500 },
         );
     }
 }
