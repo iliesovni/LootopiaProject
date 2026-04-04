@@ -208,3 +208,117 @@ Content-Type: application/json
 {
   "stepId": "{{mainStep2Id}}"
 }
+
+###
+# @name REGISTER
+POST http://localhost:3000/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "playerrandom@lootopia.test",
+  "username": "RandomName",
+  "password": "Lootopia@123"
+}
+
+###
+# @name REGISTER_EXISTING_EMAIL
+POST http://localhost:3000/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "Player1@lootopia.test.it",
+  "username": "RandomName2",
+  "password": "Lootopia@123"
+}
+
+###
+# @name REGISTER_EXISTING_USERNAME
+POST http://localhost:3000/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "Player2@lootopia.test.it",
+  "username": "RandomName1",
+  "password": "Lootopia@123"
+}
+
+###
+# @name REGISTER_NO_UPPERCASE_IN_PWD
+POST http://localhost:3000/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "player2@lootopia.test",
+  "username": "player_two",
+  "password": "lootopia@123"
+}
+
+###
+# @name REGISTER_NOT_ALLOWED_CHARS_IN_PWD
+POST http://localhost:3000/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "player4@lootopia.test",
+  "username": "player_four",
+  "password": "Lootopia\"123!"
+}
+
+###
+# @name REGISTER_INVALID_DATA
+POST http://localhost:3000/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "not-an-email",
+  "username": "ab",
+  "password": "123"
+}
+
+###
+# @name LOGIN_EMAIL
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "identifier": "playerrandom@lootopia.test",
+  "password": "Lootopia@123"
+}
+
+###
+# @name LOGIN_USERNAME
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "identifier": "RandomName",
+  "password": "Lootopia@123"
+}
+
+###
+# @name INVALID_PWD
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "identifier": "RandomName",
+  "password": "WrongPassword@123"
+}
+
+###
+# @name INVALID_USER
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "identifier": "unknown_user",
+  "password": "Lootopia@123"
+}
+
+###
+# @name LOGGED_USER
+GET http://localhost:3000/api/auth/me
+
+###
+# @name LOG_OUT
+POST http://localhost:3000/api/auth/logout

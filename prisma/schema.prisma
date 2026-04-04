@@ -64,7 +64,7 @@ model User {
   id           String   @id @default(uuid())
   email        String   @unique
   passwordHash String
-  username     String
+  username     String   @unique
   role         Role     @default(PLAYER)
   avatarUrl    String?
   createdAt    DateTime @default(now())
