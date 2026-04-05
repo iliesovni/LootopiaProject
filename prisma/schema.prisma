@@ -21,6 +21,7 @@ enum Difficulty {
 enum ParticipationStatus {
   IN_PROGRESS
   COMPLETED
+  ABANDONED
 }
 
 enum ARMarkerType {
@@ -32,6 +33,16 @@ enum ARMarkerType {
 enum HuntMode {
   COMMUNITY
   PARTNER
+}
+
+enum HuntStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum HuntVisibility {
+  PUBLIC
+  PRIVATE
 }
 
 model Hunt {
@@ -58,6 +69,12 @@ model Hunt {
 
   steps          Step[]
   participations Participation[]
+
+  status     HuntStatus     @default(DRAFT)
+  visibility HuntVisibility @default(PUBLIC)
+  accessCode String? // si PRIVATE
+  isDeleted  Boolean        @default(false)
+  bannerUrl  String? // partner uniquement
 }
 
 model User {

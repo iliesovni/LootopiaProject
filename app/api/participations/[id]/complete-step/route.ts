@@ -1,7 +1,7 @@
 import { apiValidationError } from "@/lib/api/validation";
-import { participationProgressInclude } from "@/lib/db/includes/participation.include";
-import { prisma } from "@/lib/db/prisma";
-import { getTargetStepProgress, mapParticipationError } from "@/lib/services/participation.service";
+import { AuthError } from "@/lib/auth/current-user";
+import { requireAuth } from "@/lib/auth/guards";
+import { completeStep, mapParticipationError } from "@/lib/services/participation.service";
 import { completeStepSchema } from "@/schemas/participation";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -12,12 +12,17 @@ export async function POST(
     const logContext: {
         participationId: string | null;
         stepId: string | null;
+        userId: string | null;
     } = {
         participationId: null,
         stepId: null,
+        userId: null,
     };
 
     try {
+        const user = await requireAuth();
+        logContext.userId = user.id;
+
         const { id } = await context.params;
         logContext.participationId = id;
 
@@ -32,81 +37,27 @@ export async function POST(
         const { stepId } = validation.data;
         logContext.stepId = stepId;
 
-        const participation = await prisma.participation.findUnique({
-            where: { id },
-            include: participationProgressInclude,
-        });
-
-        if (!participation) {
-            return NextResponse.json(
-                {
-                    message: "Participation introuvable.",
-                    error: "PARTICIPATION_NOT_FOUND",
-                },
-                { status: 404 },
-            );
-        }
-
-        const targetProgress = getTargetStepProgress(participation, stepId);
-        const clues = targetProgress.step.clues;
-
-        const safeCluesUsed = Math.min(
-            targetProgress.cluesUsed,
-            clues.length,
-        );
-
-        const penalties = clues
-        .slice(0, safeCluesUsed)
-        .reduce(
-            (sum: number, clue: { penaltyPoints: number }) =>
-                sum + clue.penaltyPoints,
-            0,
-        );
-
-        const pointsEarned = Math.max(
-            0,
-            targetProgress.step.pointsReward - penalties,
-        );
-
-        const result = await prisma.$transaction(async (tx) => {
-            await tx.stepProgress.update({
-                where: {
-                    participationId_stepId: {
-                        participationId: participation.id,
-                        stepId,
-                    },
-                },
-                data: {
-                    isCompleted: true,
-                    completedAt: new Date(),
-                    pointsEarned,
-                },
-            });
-
-            const updatedParticipation = await tx.participation.update({
-                where: { id: participation.id },
-                data: {
-                    totalScore: {
-                        increment: pointsEarned,
-                    },
-                },
-            });
-
-            return {
-                updatedParticipation,
-            };
+        const result = await completeStep({
+            participationId: id,
+            userId: user.id,
+            stepId,
         });
 
         return NextResponse.json({
             message: "Étape complétée avec succès.",
-            data: {
-                participationId: participation.id,
-                stepId,
-                pointsEarned,
-                totalScore: result.updatedParticipation.totalScore,
-            },
+            data: result,
         });
     } catch (error) {
+        if (error instanceof AuthError) {
+            return NextResponse.json(
+                {
+                    message: error.message,
+                    error: error.code,
+                },
+                { status: error.status },
+            );
+        }
+
         const mappedError = mapParticipationError(error);
         if (mappedError) {
             return mappedError;
