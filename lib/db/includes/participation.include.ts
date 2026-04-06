@@ -1,23 +1,34 @@
-export const participationInclude = {
+import { Prisma } from "@prisma/client";
+
+export const participationPublicSelect = {
+    id: true,
+    status: true,
+    totalScore: true,
+    startedAt: true,
+    completedAt: true,
+    huntId: true,
+    userId: true,
     hunt: {
         select: {
             id: true,
             title: true,
             location: true,
             difficulty: true,
-            isPublic: true,
-        },
-    },
-    user: {
-        select: {
-            id: true,
-            username: true,
-            email: true,
-            role: true,
+            bannerUrl: true,
         },
     },
     stepProgress: {
-        include: {
+        orderBy: {
+            step: {
+                orderIndex: "asc" as const,
+            },
+        },
+        select: {
+            stepId: true,
+            isCompleted: true,
+            cluesUsed: true,
+            pointsEarned: true,
+            completedAt: true,
             step: {
                 select: {
                     id: true,
@@ -27,34 +38,37 @@ export const participationInclude = {
                 },
             },
         },
-        orderBy: {
-            step: {
-                orderIndex: "asc" as const,
-            },
-        },
     },
-};
+} satisfies Prisma.ParticipationSelect;
 
-export const participationProgressInclude = {
+export const participationProgressInternalSelect = {
+    id: true,
+    userId: true,
+    huntId: true,
+    status: true,
+    totalScore: true,
+    startedAt: true,
+    completedAt: true,
     hunt: {
         select: {
             id: true,
             title: true,
             location: true,
             difficulty: true,
-            isPublic: true,
-        },
-    },
-    user: {
-        select: {
-            id: true,
-            username: true,
-            email: true,
-            role: true,
         },
     },
     stepProgress: {
-        include: {
+        orderBy: {
+            step: {
+                orderIndex: "asc" as const,
+            },
+        },
+        select: {
+            stepId: true,
+            isCompleted: true,
+            cluesUsed: true,
+            pointsEarned: true,
+            completedAt: true,
             step: {
                 select: {
                     id: true,
@@ -62,22 +76,19 @@ export const participationProgressInclude = {
                     orderIndex: true,
                     pointsReward: true,
                     clues: {
-                        select: {
-                            id: true,
-                            penaltyPoints: true,
-                            orderIndex: true,
-                        },
                         orderBy: {
                             orderIndex: "asc" as const,
+                        },
+                        select: {
+                            id: true,
+                            content: true,
+                            penaltyPoints: true,
+                            orderIndex: true,
                         },
                     },
                 },
             },
         },
-        orderBy: {
-            step: {
-                orderIndex: "asc" as const,
-            },
-        },
     },
-};
+} satisfies Prisma.ParticipationSelect;
+

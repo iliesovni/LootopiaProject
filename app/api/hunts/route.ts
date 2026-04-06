@@ -1,14 +1,21 @@
-import { huntInclude } from "@/lib/db/includes/hunt.include";
+import { AuthError } from "@/lib/auth/current-user";
+import { requireAuth } from "@/lib/auth/guards";
+import { huntCreatedSelect, huntPublicListSelect } from "@/lib/db/includes/hunt.include";
 import { prisma } from "@/lib/db/prisma";
 import { createHuntSchema } from "@/schemas/hunt";
-import { Prisma } from "@prisma/client";
+import { HuntMode, HuntStatus, HuntVisibility, Prisma, Role } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 export async function GET() {
     try {
         const hunts = await prisma.hunt.findMany({
-            include: huntInclude,
+            where: {
+                status: HuntStatus.PUBLISHED,
+                visibility: HuntVisibility.PUBLIC,
+                isDeleted: false,
+            },
+            select: huntPublicListSelect,
             orderBy: {
                 createdAt: "desc",
             },
@@ -36,6 +43,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
     try {
+        const currentUser = await requireAuth();
         const body = await request.json();
 
         const validation = createHuntSchema.safeParse(body);
@@ -53,9 +61,47 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        if (currentUser.role !== Role.PLAYER && currentUser.role !== Role.PARTNER) {
+            return NextResponse.json(
+                {
+                    message: "Ce rôle n'est pas autorisé à créer une chasse.",
+                    error: "FORBIDDEN_ROLE",
+                },
+                { status: 403 },
+            );
+        }
+
+        let mode: HuntMode = HuntMode.COMMUNITY;
+        let partnerId: string | null = null;
+
+        if (currentUser.role === Role.PARTNER) {
+            const partnerProfile = await prisma.partner.findUnique({
+                where: { userId: currentUser.id },
+                select: { id: true },
+            });
+
+            if (!partnerProfile) {
+                return NextResponse.json(
+                    {
+                        message: "Aucun profil partenaire associé à cet utilisateur.",
+                        error: "PARTNER_PROFILE_NOT_FOUND",
+                    },
+                    { status: 400 },
+                );
+            }
+
+            mode = HuntMode.PARTNER;
+            partnerId = partnerProfile.id;
+        }
+
         const hunt = await prisma.hunt.create({
-            data: validation.data,
-            include: huntInclude,
+            data: {
+                ...validation.data,
+                createdById: currentUser.id,
+                mode,
+                partnerId,
+            },
+            select: huntCreatedSelect,
         });
 
         return NextResponse.json(
@@ -67,6 +113,16 @@ export async function POST(request: NextRequest) {
         );
     } catch (error) {
         console.error("POST /api/hunts error:", error);
+
+        if (error instanceof AuthError) {
+            return NextResponse.json(
+                {
+                    message: error.message,
+                    error: error.code,
+                },
+                { status: error.status },
+            );
+        }
 
         if (error instanceof Prisma.PrismaClientKnownRequestError) {
             if (error.code === "P2003") {

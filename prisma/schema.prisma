@@ -21,6 +21,7 @@ enum Difficulty {
 enum ParticipationStatus {
   IN_PROGRESS
   COMPLETED
+  ABANDONED
 }
 
 enum ARMarkerType {
@@ -32,6 +33,16 @@ enum ARMarkerType {
 enum HuntMode {
   COMMUNITY
   PARTNER
+}
+
+enum HuntStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum HuntVisibility {
+  PUBLIC
+  PRIVATE
 }
 
 model Hunt {
@@ -58,13 +69,21 @@ model Hunt {
 
   steps          Step[]
   participations Participation[]
+
+  status     HuntStatus     @default(DRAFT)
+  visibility HuntVisibility @default(PUBLIC)
+  accessCode String?
+  isDeleted  Boolean        @default(false)
+  bannerUrl  String?
+
+  huntAccessAttempts HuntAccessAttempt[]
 }
 
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
   passwordHash String
-  username     String
+  username     String   @unique
   role         Role     @default(PLAYER)
   avatarUrl    String?
   createdAt    DateTime @default(now())
@@ -74,6 +93,8 @@ model User {
   participations Participation[]
   partner        Partner?
   stats          UserStats?
+
+  huntAccessAttempts HuntAccessAttempt[]
 }
 
 model Partner {
@@ -162,4 +183,18 @@ model UserStats {
   level          Int    @default(1)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model HuntAccessAttempt {
+  id             String   @id @default(cuid())
+  userId         String
+  huntId         String
+  failedAttempts Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hunt Hunt @relation(fields: [huntId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, huntId])
 }

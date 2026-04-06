@@ -1,16 +1,18 @@
-import { stepInclude } from "@/lib/db/includes/step.include";
-import { prisma } from "@/lib/db/prisma";
+import { AuthError } from "@/lib/auth/current-user";
+import { requireAuth } from "@/lib/auth/guards";
+import { listAccessibleSteps } from "@/lib/services/step.service";
 import { NextResponse } from "next/server";
 
 export async function GET() {
     try {
-        const steps = await prisma.step.findMany({
-            include: stepInclude,
-            orderBy: [{ huntId: "asc" }, { orderIndex: "asc" }],
+        const currentUser = await requireAuth();
+
+        const steps = await listAccessibleSteps({
+            currentUserId: currentUser.id,
         });
 
         return NextResponse.json({
-            message: "Les étapes ont été récupérées",
+            message: "Les étapes ont été récupérées.",
             data: {
                 count: steps.length,
                 items: steps,
@@ -18,6 +20,16 @@ export async function GET() {
         });
     } catch (error) {
         console.error("GET /api/steps error:", error);
+
+        if (error instanceof AuthError) {
+            return NextResponse.json(
+                {
+                    message: error.message,
+                    error: error.code,
+                },
+                { status: error.status },
+            );
+        }
 
         return NextResponse.json(
             {

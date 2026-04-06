@@ -1,4 +1,9 @@
-import { ParticipationStatus } from "@prisma/client";
+import {
+    participationProgressInternalSelect,
+    participationPublicSelect,
+} from "@/lib/db/includes/participation.include";
+import { prisma } from "@/lib/db/prisma";
+import { HuntStatus, HuntVisibility, ParticipationStatus, Prisma, Role } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 export class ParticipationError extends Error {
@@ -8,7 +13,10 @@ export class ParticipationError extends Error {
     }
 }
 
+const MAX_ACCESS_CODE_ATTEMPTS = 10;
+
 type ClueLike = {
+    content: string;
     penaltyPoints: number;
     orderIndex: number;
 };
@@ -35,6 +43,78 @@ type StepProgressWithStep = {
 type ParticipationWithProgress = {
     status: ParticipationStatus;
     stepProgress: StepProgressWithNullableStep[];
+};
+
+type StartParticipationInput = {
+    userId: string;
+    huntId: string;
+    accessCode?: string | null;
+};
+
+type StartableHunt = {
+    id: string;
+    status: HuntStatus;
+    visibility: HuntVisibility;
+    accessCode: string | null;
+    isDeleted: boolean;
+    steps: {
+        id: string;
+        orderIndex: number;
+    }[];
+};
+
+type CompleteStepInput = {
+    participationId: string;
+    userId: string;
+    stepId: string;
+};
+
+type UseClueInput = {
+    participationId: string;
+    userId: string;
+    stepId: string;
+};
+
+type FinishParticipationInput = {
+    participationId: string;
+    userId: string;
+};
+
+type GetParticipationInput = {
+    participationId: string;
+    userId: string;
+};
+
+type ParticipationPublicStepProgress = {
+    stepId: string;
+    isCompleted: boolean;
+    cluesUsed: number;
+    pointsEarned: number;
+    completedAt: Date | null;
+    step: {
+        id: string;
+        title: string;
+        orderIndex: number;
+        pointsReward: number;
+    } | null;
+};
+
+type ParticipationPublicView = {
+    id: string;
+    status: ParticipationStatus;
+    totalScore: number;
+    startedAt: Date;
+    completedAt: Date | null;
+    huntId: string;
+    userId: string;
+    hunt: {
+        id: string;
+        title: string;
+        location: string | null;
+        difficulty: string | null;
+        bannerUrl: string | null;
+    } | null;
+    stepProgress: ParticipationPublicStepProgress[];
 };
 
 export function getTargetStepProgress(
@@ -75,9 +155,510 @@ export function getTargetStepProgress(
     };
 }
 
+async function validateStartParticipation(tx: Prisma.TransactionClient, userId: string, huntId: string, accessCode?: string | null): Promise<StartableHunt> {
+    const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: {
+            id: true,
+            role: true,
+        },
+    });
+
+    if (!user) {
+        throw new ParticipationError("USER_NOT_FOUND");
+    }
+
+    if (user.role !== Role.PLAYER) {
+        throw new ParticipationError("USER_NOT_PLAYER");
+    }
+
+    const hunt = await tx.hunt.findUnique({
+        where: { id: huntId },
+        select: {
+            id: true,
+            status: true,
+            visibility: true,
+            accessCode: true,
+            isDeleted: true,
+            steps: {
+                orderBy: {
+                    orderIndex: "asc",
+                },
+                select: {
+                    id: true,
+                    orderIndex: true,
+                },
+            },
+        },
+    });
+
+    if (!hunt || hunt.isDeleted) {
+        throw new ParticipationError("HUNT_NOT_FOUND");
+    }
+
+    if (hunt.status !== HuntStatus.PUBLISHED) {
+        throw new ParticipationError("HUNT_NOT_PUBLISHED");
+    }
+
+    const accessAttempt = await getAccessAttempt(tx, userId, huntId);
+
+    if (hunt.visibility === HuntVisibility.PRIVATE && accessAttempt && accessAttempt.failedAttempts >= MAX_ACCESS_CODE_ATTEMPTS) {
+        throw new ParticipationError("ACCESS_CODE_ATTEMPTS_EXCEEDED");
+    }
+
+    if (hunt.visibility === HuntVisibility.PRIVATE) {
+        if (!accessCode) {
+            throw new ParticipationError("ACCESS_CODE_REQUIRED");
+        }
+
+        if (hunt.accessCode !== accessCode) {
+            const updatedAttempt = await registerFailedAccessAttempt(tx, userId, huntId);
+
+            if (updatedAttempt.failedAttempts >= MAX_ACCESS_CODE_ATTEMPTS) {
+                throw new ParticipationError("ACCESS_CODE_ATTEMPTS_EXCEEDED");
+            }
+
+            throw new ParticipationError("INVALID_ACCESS_CODE");
+        }
+
+        await clearAccessAttempts(tx, userId, huntId);
+    }
+
+    if (hunt.steps.length === 0) {
+        throw new ParticipationError("HUNT_HAS_NO_STEPS");
+    }
+
+    return hunt;
+}
+
+async function createParticipationWithProgress(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    huntId: string,
+    stepIds: string[],
+) {
+    const participation = await tx.participation.create({
+        data: {
+            userId,
+            huntId,
+            status: ParticipationStatus.IN_PROGRESS,
+        },
+    });
+
+    await tx.stepProgress.createMany({
+        data: stepIds.map((stepId) => ({
+            participationId: participation.id,
+            stepId,
+            isCompleted: false,
+            cluesUsed: 0,
+            pointsEarned: 0,
+        })),
+    });
+
+    const createdParticipation = await tx.participation.findUnique({
+        where: {
+            id: participation.id,
+        },
+        select: participationPublicSelect,
+    });
+
+    if (!createdParticipation) {
+        throw new ParticipationError("PARTICIPATION_NOT_FOUND");
+    }
+
+    return buildParticipationGameplayView(createdParticipation);
+}
+
+export async function getParticipationById({ participationId, userId }: GetParticipationInput) {
+    const participation = await prisma.participation.findUnique({
+        where: { id: participationId },
+        select: participationPublicSelect,
+    });
+
+    if (!participation) {
+        throw new ParticipationError("PARTICIPATION_NOT_FOUND");
+    }
+
+    if (participation.userId !== userId) {
+        throw new ParticipationError("PARTICIPATION_FORBIDDEN");
+    }
+
+    return buildParticipationGameplayView(participation);
+}
+
+export async function startParticipation({ userId, huntId, accessCode }: StartParticipationInput) {
+    try {
+        return await prisma.$transaction(async (tx) => {
+            const hunt = await validateStartParticipation(
+                tx,
+                userId,
+                huntId,
+                accessCode,
+            );
+
+            const existingParticipation = await tx.participation.findUnique({
+                where: {
+                    userId_huntId: {
+                        userId,
+                        huntId,
+                    },
+                },
+                select: participationPublicSelect,
+            });
+
+            if (existingParticipation) {
+                if (existingParticipation.status === ParticipationStatus.ABANDONED) {
+                    const resumedParticipation = await tx.participation.update({
+                        where: { id: existingParticipation.id },
+                        data: {
+                            status: ParticipationStatus.IN_PROGRESS,
+                        },
+                        select: participationPublicSelect,
+                    });
+
+                    return buildParticipationGameplayView(resumedParticipation);
+                }
+
+                throw new ParticipationError("PARTICIPATION_ALREADY_EXISTS");
+            }
+
+            return createParticipationWithProgress(
+                tx,
+                userId,
+                huntId,
+                hunt.steps.map((step) => step.id),
+            );
+        });
+    } catch (error) {
+        if (error instanceof ParticipationError) {
+            throw error;
+        }
+
+        if (error instanceof Prisma.PrismaClientKnownRequestError) {
+            if (error.code === "P2002") {
+                throw new ParticipationError("PARTICIPATION_ALREADY_EXISTS");
+            }
+
+            if (error.code === "P2003") {
+                throw new ParticipationError("INVALID_RELATION");
+            }
+        }
+
+        throw error;
+    }
+}
+
+export async function completeStep({ participationId, userId, stepId }: CompleteStepInput) {
+    const participation = await prisma.participation.findUnique({
+        where: { id: participationId },
+        select: participationProgressInternalSelect,
+    });
+
+    if (!participation) {
+        throw new ParticipationError("PARTICIPATION_NOT_FOUND");
+    }
+
+    if (participation.userId !== userId) {
+        throw new ParticipationError("PARTICIPATION_FORBIDDEN");
+    }
+
+    const targetProgress = getTargetStepProgress(participation, stepId);
+    const clues = targetProgress.step.clues;
+    const safeCluesUsed = Math.min(targetProgress.cluesUsed, clues.length);
+
+    const penalties = clues
+    .slice(0, safeCluesUsed)
+    .reduce(
+        (sum: number, clue: { penaltyPoints: number }) =>
+            sum + clue.penaltyPoints,
+        0,
+    );
+
+    const pointsEarned = Math.max(
+        0,
+        targetProgress.step.pointsReward - penalties,
+    );
+
+    const result = await prisma.$transaction(async (tx) => {
+        await tx.stepProgress.update({
+            where: {
+                participationId_stepId: {
+                    participationId,
+                    stepId,
+                },
+            },
+            data: {
+                isCompleted: true,
+                completedAt: new Date(),
+                pointsEarned,
+            },
+        });
+
+        return tx.participation.update({
+            where: { id: participationId },
+            data: {
+                totalScore: {
+                    increment: pointsEarned,
+                },
+            },
+            select: {
+                id: true,
+                totalScore: true,
+            },
+        });
+    });
+
+    return {
+        participationId,
+        stepId,
+        pointsEarned,
+        totalScore: result.totalScore,
+    };
+}
+
+export async function useClue({ participationId, userId, stepId }: UseClueInput) {
+    const participation = await prisma.participation.findUnique({
+        where: { id: participationId },
+        select: participationProgressInternalSelect,
+    });
+
+    if (!participation) {
+        throw new ParticipationError("PARTICIPATION_NOT_FOUND");
+    }
+
+    if (participation.userId !== userId) {
+        throw new ParticipationError("PARTICIPATION_FORBIDDEN");
+    }
+
+    const targetProgress = getTargetStepProgress(participation, stepId);
+    const clues = targetProgress.step.clues;
+
+    if (targetProgress.cluesUsed >= clues.length) {
+        throw new ParticipationError("NO_MORE_CLUES_AVAILABLE");
+    }
+
+    const nextClue = clues[targetProgress.cluesUsed];
+
+    const updatedProgress = await prisma.stepProgress.update({
+        where: {
+            participationId_stepId: {
+                participationId,
+                stepId,
+            },
+        },
+        data: {
+            cluesUsed: {
+                increment: 1,
+            },
+        },
+        select: {
+            cluesUsed: true,
+        },
+    });
+
+    return {
+        clue: {
+            content: nextClue.content,
+        },
+        cluesUsed: updatedProgress.cluesUsed,
+        remainingClues: clues.length - updatedProgress.cluesUsed,
+    };
+}
+
+export async function finishParticipation({ participationId, userId }: FinishParticipationInput) {
+    const participation = await prisma.participation.findUnique({
+        where: { id: participationId },
+        select: participationPublicSelect,
+    });
+
+    if (!participation) {
+        throw new ParticipationError("PARTICIPATION_NOT_FOUND");
+    }
+
+    if (participation.userId !== userId) {
+        throw new ParticipationError("PARTICIPATION_FORBIDDEN");
+    }
+
+    if (participation.status !== ParticipationStatus.IN_PROGRESS) {
+        throw new ParticipationError("PARTICIPATION_NOT_IN_PROGRESS");
+    }
+
+    const hasRemainingSteps = participation.stepProgress.some(
+        (progress) => !progress.isCompleted,
+    );
+
+    if (hasRemainingSteps) {
+        throw new ParticipationError("PARTICIPATION_HAS_REMAINING_STEPS");
+    }
+
+    const updatedParticipation = await prisma.participation.update({
+        where: { id: participationId },
+        data: {
+            status: ParticipationStatus.COMPLETED,
+            completedAt: new Date(),
+        },
+        select: participationPublicSelect,
+    });
+
+    return buildParticipationGameplayView(updatedParticipation);
+}
+
+function buildParticipationGameplayView(participation: ParticipationPublicView) {
+    const completedSteps = participation.stepProgress.filter(
+        (progress) => progress.isCompleted,
+    );
+
+    const currentStep =
+        participation.status === ParticipationStatus.IN_PROGRESS
+            ? participation.stepProgress.find((progress) => !progress.isCompleted) ?? null
+            : null;
+
+    return {
+        id: participation.id,
+        status: participation.status,
+        totalScore: participation.totalScore,
+        startedAt: participation.startedAt,
+        completedAt: participation.completedAt,
+        huntId: participation.huntId,
+        userId: participation.userId,
+        hunt: participation.hunt,
+        currentStep,
+        completedSteps,
+    };
+}
+
+async function getAccessAttempt(tx: Prisma.TransactionClient, userId: string, huntId: string) {
+    return tx.huntAccessAttempt.findUnique({
+        where: {
+            userId_huntId: {
+                userId,
+                huntId,
+            },
+        },
+        select: {
+            id: true,
+            failedAttempts: true,
+        },
+    });
+}
+
+async function registerFailedAccessAttempt(tx: Prisma.TransactionClient, userId: string, huntId: string) {
+    return tx.huntAccessAttempt.upsert({
+        where: {
+            userId_huntId: {
+                userId,
+                huntId,
+            },
+        },
+        create: {
+            userId,
+            huntId,
+            failedAttempts: 1,
+        },
+        update: {
+            failedAttempts: {
+                increment: 1,
+            },
+        },
+        select: {
+            failedAttempts: true,
+        },
+    });
+}
+
+async function clearAccessAttempts(tx: Prisma.TransactionClient, userId: string, huntId: string) {
+    await tx.huntAccessAttempt.deleteMany({
+        where: {
+            userId,
+            huntId,
+        },
+    });
+}
+
 export function mapParticipationError(error: unknown) {
     if (error instanceof ParticipationError) {
         switch (error.message) {
+            case "USER_NOT_FOUND":
+                return NextResponse.json(
+                    {
+                        message: "Utilisateur introuvable.",
+                        error: "USER_NOT_FOUND",
+                    },
+                    { status: 404 },
+                );
+
+            case "USER_NOT_PLAYER":
+                return NextResponse.json(
+                    {
+                        message: "Seul un joueur peut démarrer une chasse.",
+                        error: "USER_NOT_PLAYER",
+                    },
+                    { status: 403 },
+                );
+
+            case "HUNT_NOT_FOUND":
+                return NextResponse.json(
+                    {
+                        message: "Chasse introuvable.",
+                        error: "HUNT_NOT_FOUND",
+                    },
+                    { status: 404 },
+                );
+
+            case "HUNT_NOT_PUBLISHED":
+                return NextResponse.json(
+                    {
+                        message: "Cette chasse n'est pas encore publiée.",
+                        error: "HUNT_NOT_PUBLISHED",
+                    },
+                    { status: 409 },
+                );
+
+            case "ACCESS_CODE_REQUIRED":
+                return NextResponse.json(
+                    {
+                        message: "Un code d'accès est requis pour cette chasse privée.",
+                        error: "ACCESS_CODE_REQUIRED",
+                    },
+                    { status: 403 },
+                );
+
+            case "INVALID_ACCESS_CODE":
+                return NextResponse.json(
+                    {
+                        message: "Le code d'accès fourni est invalide.",
+                        error: "INVALID_ACCESS_CODE",
+                    },
+                    { status: 403 },
+                );
+
+            case "HUNT_HAS_NO_STEPS":
+                return NextResponse.json(
+                    {
+                        message: "Impossible de démarrer une chasse sans étapes.",
+                        error: "HUNT_HAS_NO_STEPS",
+                    },
+                    { status: 400 },
+                );
+
+            case "PARTICIPATION_ALREADY_EXISTS":
+                return NextResponse.json(
+                    {
+                        message: "Ce joueur a déjà une participation pour cette chasse.",
+                        error: "PARTICIPATION_ALREADY_EXISTS",
+                    },
+                    { status: 409 },
+                );
+
+            case "INVALID_RELATION":
+                return NextResponse.json(
+                    {
+                        message: "Relation invalide lors du démarrage de la participation.",
+                        error: "INVALID_RELATION",
+                    },
+                    { status: 400 },
+                );
+
             case "PARTICIPATION_NOT_IN_PROGRESS":
                 return NextResponse.json(
                     {
@@ -121,6 +702,51 @@ export function mapParticipationError(error: unknown) {
                         error: "STEP_OUT_OF_ORDER",
                     },
                     { status: 409 },
+                );
+
+            case "PARTICIPATION_NOT_FOUND":
+                return NextResponse.json(
+                    {
+                        message: "Participation introuvable.",
+                        error: "PARTICIPATION_NOT_FOUND",
+                    },
+                    { status: 404 },
+                );
+
+            case "PARTICIPATION_FORBIDDEN":
+                return NextResponse.json(
+                    {
+                        message: "Vous n'avez pas accès à cette participation.",
+                        error: "PARTICIPATION_FORBIDDEN",
+                    },
+                    { status: 403 },
+                );
+
+            case "NO_MORE_CLUES_AVAILABLE":
+                return NextResponse.json(
+                    {
+                        message: "Tous les indices ont déjà été utilisés.",
+                        error: "NO_MORE_CLUES_AVAILABLE",
+                    },
+                    { status: 409 },
+                );
+
+            case "PARTICIPATION_HAS_REMAINING_STEPS":
+                return NextResponse.json(
+                    {
+                        message: "Toutes les étapes doivent être complétées avant de terminer la participation.",
+                        error: "PARTICIPATION_HAS_REMAINING_STEPS",
+                    },
+                    { status: 409 },
+                );
+
+            case "ACCESS_CODE_ATTEMPTS_EXCEEDED":
+                return NextResponse.json(
+                    {
+                        message: "Le nombre maximum de tentatives pour ce code d'accès a été atteint.",
+                        error: "ACCESS_CODE_ATTEMPTS_EXCEEDED",
+                    },
+                    { status: 403 },
                 );
         }
     }

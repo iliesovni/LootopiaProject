@@ -1,4 +1,10 @@
-export const clueInclude = {
+import { Prisma } from "@prisma/client";
+
+export const clueOwnerDetailSelect = {
+    id: true,
+    content: true,
+    penaltyPoints: true,
+    orderIndex: true,
     step: {
         select: {
             id: true,
@@ -7,4 +13,4 @@ export const clueInclude = {
             huntId: true,
         },
     },
-};
+} satisfies Prisma.ClueSelect;

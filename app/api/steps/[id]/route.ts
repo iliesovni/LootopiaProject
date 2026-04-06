@@ -1,7 +1,8 @@
-import { stepInclude } from "@/lib/db/includes/step.include";
-import { prisma } from "@/lib/db/prisma";
+import { apiValidationError } from "@/lib/api/validation";
+import { AuthError } from "@/lib/auth/current-user";
+import { requireAuth } from "@/lib/auth/guards";
+import { deleteStep, getStepById, mapStepError, updateStep } from "@/lib/services/step.service";
 import { updateStepSchema } from "@/schemas/step";
-import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 type RouteContext = {
@@ -15,29 +16,33 @@ export async function GET(
     { params }: RouteContext,
 ) {
     try {
+        const currentUser = await requireAuth();
         const { id } = await params;
 
-        const step = await prisma.step.findUnique({
-            where: { id },
-            include: stepInclude,
+        const step = await getStepById({
+            stepId: id,
+            currentUserId: currentUser.id,
         });
 
-        if (!step) {
-            return NextResponse.json(
-                {
-                    message: "Étape introuvable.",
-                    error: "STEP_NOT_FOUND",
-                },
-                { status: 404 },
-            );
-        }
-
         return NextResponse.json({
-            message: "Étape récupérée",
+            message: "Étape récupérée.",
             data: step,
         });
     } catch (error) {
         console.error("GET /api/steps/[id] error:", error);
+
+        const mapped = mapStepError(error);
+        if (mapped) return mapped;
+
+        if (error instanceof AuthError) {
+            return NextResponse.json(
+                {
+                    message: error.message,
+                    error: error.code,
+                },
+                { status: error.status },
+            );
+        }
 
         return NextResponse.json(
             {
@@ -54,111 +59,20 @@ export async function PATCH(
     context: { params: Promise<{ id: string }> },
 ) {
     try {
+        const currentUser = await requireAuth();
         const { id } = await context.params;
         const body = await request.json();
 
         const validation = updateStepSchema.safeParse(body);
 
         if (!validation.success) {
-            return NextResponse.json(
-                {
-                    message: "Payload invalide.",
-                    error: "VALIDATION_ERROR",
-                    data: {
-                        details: validation.error.issues,
-                    },
-                },
-                { status: 400 },
-            );
+            return apiValidationError(validation.error);
         }
 
-        const updatedStep = await prisma.$transaction(async (tx) => {
-            const existingStep = await tx.step.findUnique({
-                where: { id },
-                select: {
-                    id: true,
-                    huntId: true,
-                    orderIndex: true,
-                },
-            });
-
-            if (!existingStep) {
-                throw new Error("STEP_NOT_FOUND");
-            }
-
-            const { orderIndex, ...otherUpdates } = validation.data;
-
-            // Pas de déplacement d'ordre : update simple
-            if (orderIndex === undefined || orderIndex === existingStep.orderIndex) {
-                return tx.step.update({
-                    where: { id },
-                    data: otherUpdates,
-                    include: stepInclude,
-                });
-            }
-
-            // On garde une indexation 1-based cohérente avec les données existantes
-            const stepsCount = await tx.step.count({
-                where: { huntId: existingStep.huntId },
-            });
-
-            const targetOrderIndex = Math.min(
-                Math.max(orderIndex, 1),
-                stepsCount,
-            );
-
-            // On déplace temporairement la step hors de la plage pour éviter un conflit unique
-            await tx.step.update({
-                where: { id },
-                data: {
-                    orderIndex: 0,
-                },
-            });
-
-            // Déplacement vers le haut : les steps intermédiaires descendent
-            if (targetOrderIndex < existingStep.orderIndex) {
-                await tx.step.updateMany({
-                    where: {
-                        huntId: existingStep.huntId,
-                        orderIndex: {
-                            gte: targetOrderIndex,
-                            lt: existingStep.orderIndex,
-                        },
-                    },
-                    data: {
-                        orderIndex: {
-                            increment: 1,
-                        },
-                    },
-                });
-            }
-
-            // Déplacement vers le bas : les steps intermédiaires remontent
-            if (targetOrderIndex > existingStep.orderIndex) {
-                await tx.step.updateMany({
-                    where: {
-                        huntId: existingStep.huntId,
-                        orderIndex: {
-                            gt: existingStep.orderIndex,
-                            lte: targetOrderIndex,
-                        },
-                    },
-                    data: {
-                        orderIndex: {
-                            decrement: 1,
-                        },
-                    },
-                });
-            }
-
-            return tx.step.update({
-                where: { id },
-                data: {
-                    ...otherUpdates,
-                    orderIndex: targetOrderIndex,
-                },
-                include: stepInclude,
-            });
+        const updatedStep = await updateStep({
+            stepId: id,
+            currentUserId: currentUser.id,
+            data: validation.data,
         });
 
         return NextResponse.json({
@@ -166,30 +80,20 @@ export async function PATCH(
             data: updatedStep,
         });
     } catch (error) {
-        if (error instanceof Error && error.message === "STEP_NOT_FOUND") {
+        console.error("PATCH /api/steps/[id] error:", error);
+
+        const mapped = mapStepError(error);
+        if (mapped) return mapped;
+
+        if (error instanceof AuthError) {
             return NextResponse.json(
                 {
-                    message: "Étape introuvable.",
-                    error: "STEP_NOT_FOUND",
+                    message: error.message,
+                    error: error.code,
                 },
-                { status: 404 },
+                { status: error.status },
             );
         }
-
-        if (
-            error instanceof Prisma.PrismaClientKnownRequestError &&
-            error.code === "P2025"
-        ) {
-            return NextResponse.json(
-                {
-                    message: "Étape introuvable.",
-                    error: "STEP_NOT_FOUND",
-                },
-                { status: 404 },
-            );
-        }
-
-        console.error("[UPDATE_STEP_ERROR]", error);
 
         return NextResponse.json(
             {
@@ -206,45 +110,12 @@ export async function DELETE(
     { params }: RouteContext,
 ) {
     try {
+        const currentUser = await requireAuth();
         const { id } = await params;
 
-        const existingStep = await prisma.step.findUnique({
-            where: { id },
-            select: {
-                id: true,
-                huntId: true,
-                orderIndex: true,
-            },
-        });
-
-        if (!existingStep) {
-            return NextResponse.json(
-                {
-                    message: "Étape introuvable.",
-                    error: "STEP_NOT_FOUND",
-                },
-                { status: 404 },
-            );
-        }
-
-        await prisma.$transaction(async (tx) => {
-            await tx.step.delete({
-                where: { id },
-            });
-
-            await tx.step.updateMany({
-                where: {
-                    huntId: existingStep.huntId,
-                    orderIndex: {
-                        gt: existingStep.orderIndex,
-                    },
-                },
-                data: {
-                    orderIndex: {
-                        decrement: 1,
-                    },
-                },
-            });
+        await deleteStep({
+            stepId: id,
+            currentUserId: currentUser.id,
         });
 
         return NextResponse.json({
@@ -252,6 +123,19 @@ export async function DELETE(
         });
     } catch (error) {
         console.error("DELETE /api/steps/[id] error:", error);
+
+        const mapped = mapStepError(error);
+        if (mapped) return mapped;
+
+        if (error instanceof AuthError) {
+            return NextResponse.json(
+                {
+                    message: error.message,
+                    error: error.code,
+                },
+                { status: error.status },
+            );
+        }
 
         return NextResponse.json(
             {

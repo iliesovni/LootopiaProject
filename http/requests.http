@@ -7,12 +7,12 @@
 @player2Id = 44444444-4444-4444-8444-444444444444
 @player3Id = 55555555-5555-4555-8555-555555555555
 
-@mainHuntId = 66666666-6666-4666-8666-666666666666
+@mainHuntId = 594fcec1-3b9c-4c6e-8081-be4867a91349
 @startHuntId = 77777777-7777-4777-8777-777777777777
 @finishHuntId = 88888888-8888-4888-8888-888888888888
 @completedHuntId = 99999999-9999-4999-8999-999999999999
 
-@mainStep1Id = aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaa1
+@mainStep1Id = f50ae160-7faf-48d6-a215-bd090fcee501
 @mainStep2Id = aaaaaaa2-aaaa-4aaa-8aaa-aaaaaaaaaaa2
 @startStep1Id = bbbbbbb1-bbbb-4bbb-8bbb-bbbbbbbbbbb1
 @startStep2Id = bbbbbbb2-bbbb-4bbb-8bbb-bbbbbbbbbbb2
@@ -207,4 +207,150 @@ Content-Type: application/json
 
 {
   "stepId": "{{mainStep2Id}}"
+}
+
+###
+# @name REGISTER
+POST http://localhost:3000/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "playerrandom@lootopia.test",
+  "username": "RandomName",
+  "password": "Lootopia@123"
+}
+
+###
+# @name REGISTER_EXISTING_EMAIL
+POST http://localhost:3000/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "Player1@lootopia.test.it",
+  "username": "RandomName2",
+  "password": "Lootopia@123"
+}
+
+###
+# @name REGISTER_EXISTING_USERNAME
+POST http://localhost:3000/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "Player2@lootopia.test.it",
+  "username": "RandomName1",
+  "password": "Lootopia@123"
+}
+
+###
+# @name REGISTER_NO_UPPERCASE_IN_PWD
+POST http://localhost:3000/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "player2@lootopia.test",
+  "username": "player_two",
+  "password": "lootopia@123"
+}
+
+###
+# @name REGISTER_NOT_ALLOWED_CHARS_IN_PWD
+POST http://localhost:3000/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "player4@lootopia.test",
+  "username": "player_four",
+  "password": "Lootopia\"123!"
+}
+
+###
+# @name REGISTER_INVALID_DATA
+POST http://localhost:3000/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "not-an-email",
+  "username": "ab",
+  "password": "123"
+}
+
+###
+# @name LOGIN_EMAIL
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "identifier": "playerrandom@lootopia.test",
+  "password": "Lootopia@123"
+}
+
+###
+# @name LOGIN_USERNAME
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "identifier": "RandomName",
+  "password": "Lootopia@123"
+}
+
+###
+# @name INVALID_PWD
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "identifier": "RandomName",
+  "password": "WrongPassword@123"
+}
+
+###
+# @name INVALID_USER
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "identifier": "unknown_user",
+  "password": "Lootopia@123"
+}
+
+###
+# @name LOGGED_USER
+GET http://localhost:3000/api/auth/me
+
+###
+# @name LOG_OUT
+POST http://localhost:3000/api/auth/logout
+
+###
+# @name LOGIN_USER_A
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "identifier": "RandomName",
+  "password": "Lootopia@123"
+}
+
+###
+# @name ME_USER_A
+GET http://localhost:3000/api/auth/me
+
+###
+# @name START_PARTICIPATION_USER_A
+POST http://localhost:3000/api/participations/start
+Content-Type: application/json
+
+{
+  "huntId": "594fcec1-3b9c-4c6e-8081-be4867a91349"
+}
+
+###
+# @name COMPLETE_STEP_USER_A
+POST http://localhost:3000/api/participations/f7adb177-1208-49da-a434-b947a866f1f5/complete-step
+Content-Type: application/json
+
+{
+  "stepId": "f50ae160-7faf-48d6-a215-bd090fcee501"
 }
