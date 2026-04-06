@@ -1,0 +1,381 @@
+import { stepInclude } from "@/lib/db/includes/step.include";
+import { prisma } from "@/lib/db/prisma";
+import { HuntStatus, ParticipationStatus, Prisma } from "@prisma/client";
+
+export class StepNotFoundError extends Error {
+    constructor() {
+        super("STEP_NOT_FOUND");
+    }
+}
+
+export class StepForbiddenError extends Error {
+    constructor() {
+        super("FORBIDDEN_RESOURCE");
+    }
+}
+
+export class StepNotEditableError extends Error {
+    constructor() {
+        super("STEP_NOT_EDITABLE");
+    }
+}
+
+export class HuntNotFoundError extends Error {
+    constructor() {
+        super("HUNT_NOT_FOUND");
+    }
+}
+
+export class InvalidStepOrderError extends Error {
+    constructor() {
+        super("INVALID_STEP_ORDER");
+    }
+}
+
+type CreateStepInput = {
+    huntId: string;
+    currentUserId: string;
+    data: {
+        title: string;
+        description: string;
+        latitude: number;
+        longitude: number;
+        radiusMeters: number;
+        orderIndex: number;
+        pointsReward: number;
+        huntId: string;
+        arMarkerType?: "IMAGE" | "PATTERN" | "MODEL_3D" | null;
+        arAssetUrl?: string | null;
+    };
+};
+
+type UpdateStepInput = {
+    stepId: string;
+    currentUserId: string;
+    data: Prisma.StepUpdateInput & {
+        orderIndex?: number;
+    };
+};
+
+type DeleteStepInput = {
+    stepId: string;
+    currentUserId: string;
+};
+
+type GetStepInput = {
+    stepId: string;
+    currentUserId: string;
+};
+
+type ListAccessibleStepsInput = {
+    currentUserId: string;
+};
+
+type ListStepCluesInput = {
+    stepId: string;
+    currentUserId: string;
+};
+
+async function assertEditableHunt(
+    tx: Prisma.TransactionClient,
+    huntId: string,
+    currentUserId: string,
+) {
+    const hunt = await tx.hunt.findUnique({
+        where: { id: huntId },
+        select: {
+            id: true,
+            createdById: true,
+            status: true,
+            isDeleted: true,
+        },
+    });
+
+    if (!hunt || hunt.isDeleted) {
+        throw new HuntNotFoundError();
+    }
+
+    if (hunt.createdById !== currentUserId) {
+        throw new StepForbiddenError();
+    }
+
+    if (hunt.status === HuntStatus.PUBLISHED) {
+        throw new StepNotEditableError();
+    }
+
+    return hunt;
+}
+
+async function assertReadableStep(stepId: string, currentUserId: string) {
+    const step = await prisma.step.findUnique({
+        where: { id: stepId },
+        select: {
+            id: true,
+            huntId: true,
+            hunt: {
+                select: {
+                    id: true,
+                    createdById: true,
+                    isDeleted: true,
+                },
+            },
+        },
+    });
+
+    if (!step || step.hunt.isDeleted) {
+        throw new StepNotFoundError();
+    }
+
+    const isOwner = step.hunt.createdById === currentUserId;
+
+    if (isOwner) {
+        return step;
+    }
+
+    const participation = await prisma.participation.findUnique({
+        where: {
+            userId_huntId: {
+                userId: currentUserId,
+                huntId: step.huntId,
+            },
+        },
+        select: {
+            id: true,
+            status: true,
+        },
+    });
+
+    if (!participation) {
+        throw new StepForbiddenError();
+    }
+
+    if (
+        participation.status !== ParticipationStatus.IN_PROGRESS &&
+        participation.status !== ParticipationStatus.ABANDONED &&
+        participation.status !== ParticipationStatus.COMPLETED
+    ) {
+        throw new StepForbiddenError();
+    }
+
+    return step;
+}
+
+export async function listAccessibleSteps({ currentUserId }: ListAccessibleStepsInput) {
+    return prisma.step.findMany({
+        where: {
+            hunt: {
+                isDeleted: false,
+                OR: [
+                    { createdById: currentUserId },
+                    {
+                        participations: {
+                            some: {
+                                userId: currentUserId,
+                            },
+                        },
+                    },
+                ],
+            },
+        },
+        include: stepInclude,
+        orderBy: [{ huntId: "asc" }, { orderIndex: "asc" }],
+    });
+}
+
+export async function getStepById({ stepId, currentUserId }: GetStepInput) {
+    await assertReadableStep(stepId, currentUserId);
+
+    const step = await prisma.step.findUnique({
+        where: { id: stepId },
+        include: stepInclude,
+    });
+
+    if (!step) {
+        throw new StepNotFoundError();
+    }
+
+    return step;
+}
+
+export async function createStep({ huntId, currentUserId, data }: CreateStepInput) {
+    return prisma.$transaction(async (tx) => {
+        await assertEditableHunt(tx, huntId, currentUserId);
+
+        try {
+            return await tx.step.create({
+                data: {
+                    title: data.title,
+                    description: data.description,
+                    latitude: data.latitude,
+                    longitude: data.longitude,
+                    radiusMeters: data.radiusMeters,
+                    orderIndex: data.orderIndex,
+                    pointsReward: data.pointsReward,
+                    arMarkerType: data.arMarkerType ?? null,
+                    arAssetUrl: data.arAssetUrl ?? null,
+                    hunt: {
+                        connect: {
+                            id: huntId,
+                        },
+                    },
+                },
+                include: stepInclude,
+            });
+        } catch (error) {
+            if (
+                error instanceof Prisma.PrismaClientKnownRequestError &&
+                error.code === "P2002"
+            ) {
+                throw new InvalidStepOrderError();
+            }
+
+            throw error;
+        }
+    });
+}
+
+export async function updateStep({ stepId, currentUserId, data }: UpdateStepInput) {
+    return prisma.$transaction(async (tx) => {
+        const existingStep = await tx.step.findUnique({
+            where: { id: stepId },
+            select: {
+                id: true,
+                huntId: true,
+                orderIndex: true,
+            },
+        });
+
+        if (!existingStep) {
+            throw new StepNotFoundError();
+        }
+
+        await assertEditableHunt(tx, existingStep.huntId, currentUserId);
+
+        const { orderIndex, ...otherUpdates } = data;
+
+        if (orderIndex === undefined || orderIndex === existingStep.orderIndex) {
+            return tx.step.update({
+                where: { id: stepId },
+                data: otherUpdates,
+                include: stepInclude,
+            });
+        }
+
+        const stepsCount = await tx.step.count({
+            where: { huntId: existingStep.huntId },
+        });
+
+        const targetOrderIndex = Math.min(
+            Math.max(orderIndex, 1),
+            stepsCount,
+        );
+
+        await tx.step.update({
+            where: { id: stepId },
+            data: {
+                orderIndex: 0,
+            },
+        });
+
+        if (targetOrderIndex < existingStep.orderIndex) {
+            await tx.step.updateMany({
+                where: {
+                    huntId: existingStep.huntId,
+                    orderIndex: {
+                        gte: targetOrderIndex,
+                        lt: existingStep.orderIndex,
+                    },
+                },
+                data: {
+                    orderIndex: {
+                        increment: 1,
+                    },
+                },
+            });
+        }
+
+        if (targetOrderIndex > existingStep.orderIndex) {
+            await tx.step.updateMany({
+                where: {
+                    huntId: existingStep.huntId,
+                    orderIndex: {
+                        gt: existingStep.orderIndex,
+                        lte: targetOrderIndex,
+                    },
+                },
+                data: {
+                    orderIndex: {
+                        decrement: 1,
+                    },
+                },
+            });
+        }
+
+        return tx.step.update({
+            where: { id: stepId },
+            data: {
+                ...otherUpdates,
+                orderIndex: targetOrderIndex,
+            },
+            include: stepInclude,
+        });
+    });
+}
+
+export async function deleteStep({ stepId, currentUserId }: DeleteStepInput) {
+    return prisma.$transaction(async (tx) => {
+        const existingStep = await tx.step.findUnique({
+            where: { id: stepId },
+            select: {
+                id: true,
+                huntId: true,
+                orderIndex: true,
+            },
+        });
+
+        if (!existingStep) {
+            throw new StepNotFoundError();
+        }
+
+        await assertEditableHunt(tx, existingStep.huntId, currentUserId);
+
+        await tx.step.delete({
+            where: { id: stepId },
+        });
+
+        await tx.step.updateMany({
+            where: {
+                huntId: existingStep.huntId,
+                orderIndex: {
+                    gt: existingStep.orderIndex,
+                },
+            },
+            data: {
+                orderIndex: {
+                    decrement: 1,
+                },
+            },
+        });
+    });
+}
+
+export async function listCluesForStep({ stepId, currentUserId }: ListStepCluesInput) {
+    const step = await assertReadableStep(stepId, currentUserId);
+
+    return prisma.clue.findMany({
+        where: { stepId: step.id },
+        include: {
+            step: {
+                select: {
+                    id: true,
+                    title: true,
+                    orderIndex: true,
+                    huntId: true,
+                },
+            },
+        },
+        orderBy: {
+            orderIndex: "asc",
+        },
+    });
+}

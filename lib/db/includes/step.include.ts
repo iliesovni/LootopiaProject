@@ -1,14 +1,21 @@
+import { Prisma } from "@prisma/client";
+import { clueInclude } from "./clue.include";
+
 export const stepInclude = {
     hunt: {
         select: {
             id: true,
             title: true,
-            location: true,
+            createdById: true,
+            status: true,
+            visibility: true,
+            isDeleted: true,
         },
     },
     clues: {
+        include: clueInclude,
         orderBy: {
-            orderIndex: "asc" as const,
+            orderIndex: "asc",
         },
     },
-};
+} satisfies Prisma.StepInclude;

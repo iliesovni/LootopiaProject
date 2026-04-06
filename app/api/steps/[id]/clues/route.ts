@@ -1,5 +1,6 @@
-import { prisma } from "@/lib/db/prisma";
-import { Prisma } from "@prisma/client";
+import { AuthError } from "@/lib/auth/current-user";
+import { requireAuth } from "@/lib/auth/guards";
+import { listCluesForStep, StepForbiddenError, StepNotFoundError } from "@/lib/services/step.service";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -7,40 +8,12 @@ export async function GET(
     context: { params: Promise<{ id: string }> },
 ) {
     try {
+        const currentUser = await requireAuth();
         const { id } = await context.params;
 
-        const step = await prisma.step.findUnique({
-            where: { id },
-            select: {
-                id: true,
-            },
-        });
-
-        if (!step) {
-            return NextResponse.json(
-                {
-                    message: "Étape introuvable.",
-                    error: "STEP_NOT_FOUND",
-                },
-                { status: 404 },
-            );
-        }
-
-        const clues = await prisma.clue.findMany({
-            where: { stepId: id },
-            include: {
-                step: {
-                    select: {
-                        id: true,
-                        title: true,
-                        orderIndex: true,
-                        huntId: true,
-                    },
-                },
-            },
-            orderBy: {
-                orderIndex: "asc",
-            },
+        const clues = await listCluesForStep({
+            stepId: id,
+            currentUserId: currentUser.id,
         });
 
         return NextResponse.json({
@@ -53,13 +26,33 @@ export async function GET(
     } catch (error) {
         console.error("GET /api/steps/[id]/clues error:", error);
 
-        if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error instanceof AuthError) {
             return NextResponse.json(
                 {
-                    message: "Erreur base de données lors de la récupération des indices.",
-                    error: "INTERNAL_SERVER_ERROR",
+                    message: error.message,
+                    error: error.code,
                 },
-                { status: 500 },
+                { status: error.status },
+            );
+        }
+
+        if (error instanceof StepNotFoundError) {
+            return NextResponse.json(
+                {
+                    message: "Étape introuvable.",
+                    error: "STEP_NOT_FOUND",
+                },
+                { status: 404 },
+            );
+        }
+
+        if (error instanceof StepForbiddenError) {
+            return NextResponse.json(
+                {
+                    message: "Vous n'avez pas accès à cette étape.",
+                    error: "FORBIDDEN_RESOURCE",
+                },
+                { status: 403 },
             );
         }
 

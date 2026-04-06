@@ -1,14 +1,25 @@
-import { clueInclude } from "@/lib/db/includes/clue.include";
-import { prisma } from "@/lib/db/prisma";
+import { apiValidationError } from "@/lib/api/validation";
+import { AuthError } from "@/lib/auth/current-user";
+import { requireAuth } from "@/lib/auth/guards";
+import {
+    ClueForbiddenError,
+    ClueLimitReachedError,
+    ClueNotEditableError,
+    ClueOrderConflictError,
+    createClue,
+    listAccessibleClues,
+    StepNotFoundError,
+} from "@/lib/services/clue.service";
 import { createClueSchema } from "@/schemas/clue";
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET() {
     try {
-        const clues = await prisma.clue.findMany({
-            include: clueInclude,
-            orderBy: [{ stepId: "asc" }, { orderIndex: "asc" }],
+        const currentUser = await requireAuth();
+
+        const clues = await listAccessibleClues({
+            currentUserId: currentUser.id,
         });
 
         return NextResponse.json({
@@ -20,6 +31,16 @@ export async function GET() {
         });
     } catch (error) {
         console.error("GET /api/clues error:", error);
+
+        if (error instanceof AuthError) {
+            return NextResponse.json(
+                {
+                    message: error.message,
+                    error: error.code,
+                },
+                { status: error.status },
+            );
+        }
 
         return NextResponse.json(
             {
@@ -33,68 +54,18 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
     try {
+        const currentUser = await requireAuth();
         const body = await request.json();
 
         const validation = createClueSchema.safeParse(body);
 
         if (!validation.success) {
-            return NextResponse.json(
-                {
-                    message: "Payload invalide.",
-                    error: "VALIDATION_ERROR",
-                    data: {
-                        details: validation.error.issues,
-                    },
-                },
-                { status: 400 },
-            );
+            return apiValidationError(validation.error);
         }
 
-        const { stepId, content, penaltyPoints, orderIndex } = validation.data;
-
-        const createdClue = await prisma.$transaction(async (tx) => {
-            const step = await tx.step.findUnique({
-                where: { id: stepId },
-                select: { id: true },
-            });
-
-            if (!step) {
-                throw new Error("STEP_NOT_FOUND");
-            }
-
-            let finalOrderIndex = orderIndex;
-
-            if (finalOrderIndex === undefined) {
-                const lastClue = await tx.clue.findFirst({
-                    where: { stepId },
-                    orderBy: { orderIndex: "desc" },
-                    select: { orderIndex: true },
-                });
-
-                finalOrderIndex = lastClue ? lastClue.orderIndex + 1 : 1;
-            } else {
-                const existingClueAtSameIndex = await tx.clue.findFirst({
-                    where: {
-                        stepId,
-                        orderIndex: finalOrderIndex,
-                    },
-                    select: { id: true },
-                });
-
-                if (existingClueAtSameIndex) {
-                    throw new Error("CLUE_ORDER_CONFLICT");
-                }
-            }
-
-            return tx.clue.create({
-                data: {
-                    stepId,
-                    content,
-                    penaltyPoints,
-                    orderIndex: finalOrderIndex,
-                },
-                include: clueInclude,
-            });
+        const createdClue = await createClue({
+            currentUserId: currentUser.id,
+            data: validation.data,
         });
 
         return NextResponse.json(
@@ -105,26 +76,66 @@ export async function POST(request: NextRequest) {
             { status: 201 },
         );
     } catch (error) {
-        if (error instanceof Error) {
-            if (error.message === "STEP_NOT_FOUND") {
-                return NextResponse.json(
-                    {
-                        message: "Step introuvable.",
-                        error: "STEP_NOT_FOUND",
-                    },
-                    { status: 404 },
-                );
-            }
+        console.error("POST /api/clues error:", error);
 
-            if (error.message === "CLUE_ORDER_CONFLICT") {
-                return NextResponse.json(
-                    {
-                        message: "Un indice existe déjà à cet ordre pour cette étape.",
-                        error: "CLUE_ORDER_CONFLICT",
-                    },
-                    { status: 409 },
-                );
-            }
+        if (error instanceof AuthError) {
+            return NextResponse.json(
+                {
+                    message: error.message,
+                    error: error.code,
+                },
+                { status: error.status },
+            );
+        }
+
+        if (error instanceof StepNotFoundError) {
+            return NextResponse.json(
+                {
+                    message: "Étape introuvable.",
+                    error: "STEP_NOT_FOUND",
+                },
+                { status: 404 },
+            );
+        }
+
+        if (error instanceof ClueForbiddenError) {
+            return NextResponse.json(
+                {
+                    message: "Vous n'êtes pas autorisé à modifier cette étape.",
+                    error: "FORBIDDEN_RESOURCE",
+                },
+                { status: 403 },
+            );
+        }
+
+        if (error instanceof ClueNotEditableError) {
+            return NextResponse.json(
+                {
+                    message: "Cette chasse est publiée et ne peut plus être modifiée.",
+                    error: "HUNT_NOT_EDITABLE",
+                },
+                { status: 409 },
+            );
+        }
+
+        if (error instanceof ClueOrderConflictError) {
+            return NextResponse.json(
+                {
+                    message: "Un indice existe déjà à cet ordre pour cette étape.",
+                    error: "CLUE_ORDER_CONFLICT",
+                },
+                { status: 409 },
+            );
+        }
+
+        if (error instanceof ClueLimitReachedError) {
+            return NextResponse.json(
+                {
+                    message: "Une étape ne peut pas contenir plus de 3 indices.",
+                    error: "CLUE_LIMIT_REACHED",
+                },
+                { status: 409 },
+            );
         }
 
         if (
@@ -139,8 +150,6 @@ export async function POST(request: NextRequest) {
                 { status: 400 },
             );
         }
-
-        console.error("[CREATE_CLUE_ERROR]", error);
 
         return NextResponse.json(
             {

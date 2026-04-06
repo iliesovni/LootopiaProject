@@ -1,6 +1,6 @@
 import { participationInclude, participationProgressInclude } from "@/lib/db/includes/participation.include";
 import { prisma } from "@/lib/db/prisma";
-import { ParticipationStatus, Prisma, Role } from "@prisma/client";
+import { HuntStatus, HuntVisibility, ParticipationStatus, Prisma, Role } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 export class ParticipationError extends Error {
@@ -42,11 +42,15 @@ type ParticipationWithProgress = {
 type StartParticipationInput = {
     userId: string;
     huntId: string;
+    accessCode?: string | null;
 };
 
 type StartableHunt = {
     id: string;
-    isPublic: boolean;
+    status: HuntStatus;
+    visibility: HuntVisibility;
+    accessCode: string | null;
+    isDeleted: boolean;
     steps: {
         id: string;
         orderIndex: number;
@@ -112,6 +116,7 @@ async function validateStartParticipation(
     tx: Prisma.TransactionClient,
     userId: string,
     huntId: string,
+    accessCode?: string | null,
 ): Promise<StartableHunt> {
     const user = await tx.user.findUnique({
         where: { id: userId },
@@ -133,7 +138,10 @@ async function validateStartParticipation(
         where: { id: huntId },
         select: {
             id: true,
-            isPublic: true,
+            status: true,
+            visibility: true,
+            accessCode: true,
+            isDeleted: true,
             steps: {
                 orderBy: {
                     orderIndex: "asc",
@@ -146,32 +154,26 @@ async function validateStartParticipation(
         },
     });
 
-    if (!hunt) {
+    if (!hunt || hunt.isDeleted) {
         throw new ParticipationError("HUNT_NOT_FOUND");
     }
 
-    if (!hunt.isPublic) {
-        throw new ParticipationError("HUNT_NOT_PUBLIC");
+    if (hunt.status !== HuntStatus.PUBLISHED) {
+        throw new ParticipationError("HUNT_NOT_PUBLISHED");
+    }
+
+    if (hunt.visibility === HuntVisibility.PRIVATE) {
+        if (!accessCode) {
+            throw new ParticipationError("ACCESS_CODE_REQUIRED");
+        }
+
+        if (hunt.accessCode !== accessCode) {
+            throw new ParticipationError("INVALID_ACCESS_CODE");
+        }
     }
 
     if (hunt.steps.length === 0) {
         throw new ParticipationError("HUNT_HAS_NO_STEPS");
-    }
-
-    const existingParticipation = await tx.participation.findUnique({
-        where: {
-            userId_huntId: {
-                userId,
-                huntId,
-            },
-        },
-        select: {
-            id: true,
-        },
-    });
-
-    if (existingParticipation) {
-        throw new ParticipationError("PARTICIPATION_ALREADY_EXISTS");
     }
 
     return hunt;
@@ -215,10 +217,43 @@ async function createParticipationWithProgress(
     return createdParticipation;
 }
 
-export async function startParticipation({ userId, huntId }: StartParticipationInput) {
+export async function startParticipation({
+                                             userId,
+                                             huntId,
+                                             accessCode,
+                                         }: StartParticipationInput) {
     try {
         return await prisma.$transaction(async (tx) => {
-            const hunt = await validateStartParticipation(tx, userId, huntId);
+            const hunt = await validateStartParticipation(
+                tx,
+                userId,
+                huntId,
+                accessCode,
+            );
+
+            const existingParticipation = await tx.participation.findUnique({
+                where: {
+                    userId_huntId: {
+                        userId,
+                        huntId,
+                    },
+                },
+                include: participationInclude,
+            });
+
+            if (existingParticipation) {
+                if (existingParticipation.status === ParticipationStatus.ABANDONED) {
+                    return tx.participation.update({
+                        where: { id: existingParticipation.id },
+                        data: {
+                            status: ParticipationStatus.IN_PROGRESS,
+                        },
+                        include: participationInclude,
+                    });
+                }
+
+                throw new ParticipationError("PARTICIPATION_ALREADY_EXISTS");
+            }
 
             return createParticipationWithProgress(
                 tx,
@@ -262,7 +297,6 @@ export async function completeStep({ participationId, userId, stepId }: Complete
 
     const targetProgress = getTargetStepProgress(participation, stepId);
     const clues = targetProgress.step.clues;
-
     const safeCluesUsed = Math.min(targetProgress.cluesUsed, clues.length);
 
     const penalties = clues
@@ -435,11 +469,29 @@ export function mapParticipationError(error: unknown) {
                     { status: 404 },
                 );
 
-            case "HUNT_NOT_PUBLIC":
+            case "HUNT_NOT_PUBLISHED":
                 return NextResponse.json(
                     {
-                        message: "Cette chasse n'est pas accessible publiquement.",
-                        error: "HUNT_NOT_PUBLIC",
+                        message: "Cette chasse n'est pas encore publiée.",
+                        error: "HUNT_NOT_PUBLISHED",
+                    },
+                    { status: 409 },
+                );
+
+            case "ACCESS_CODE_REQUIRED":
+                return NextResponse.json(
+                    {
+                        message: "Un code d'accès est requis pour cette chasse privée.",
+                        error: "ACCESS_CODE_REQUIRED",
+                    },
+                    { status: 403 },
+                );
+
+            case "INVALID_ACCESS_CODE":
+                return NextResponse.json(
+                    {
+                        message: "Le code d'accès fourni est invalide.",
+                        error: "INVALID_ACCESS_CODE",
                     },
                     { status: 403 },
                 );
@@ -551,7 +603,6 @@ export function mapParticipationError(error: unknown) {
                     },
                     { status: 409 },
                 );
-
         }
     }
 

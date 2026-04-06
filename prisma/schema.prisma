@@ -72,9 +72,9 @@ model Hunt {
 
   status     HuntStatus     @default(DRAFT)
   visibility HuntVisibility @default(PUBLIC)
-  accessCode String? // si PRIVATE
+  accessCode String?
   isDeleted  Boolean        @default(false)
-  bannerUrl  String? // partner uniquement
+  bannerUrl  String?
 }
 
 model User {

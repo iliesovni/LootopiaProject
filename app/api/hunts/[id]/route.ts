@@ -1,7 +1,16 @@
+import { AuthError, getOptionalCurrentUser } from "@/lib/auth/current-user";
+import { requireAuth } from "@/lib/auth/guards";
 import { huntInclude } from "@/lib/db/includes/hunt.include";
 import { prisma } from "@/lib/db/prisma";
+import {
+    deleteHunt,
+    HuntForbiddenError,
+    HuntNotEditableError,
+    HuntNotFoundError,
+    updateHunt,
+} from "@/lib/services/hunt.service";
 import { updateHuntSchema } from "@/schemas/hunt";
-import { Prisma } from "@prisma/client";
+import { HuntStatus, Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -17,6 +26,7 @@ export async function GET(
 ) {
     try {
         const { id } = await params;
+        const currentUser = await getOptionalCurrentUser();
 
         const hunt = await prisma.hunt.findUnique({
             where: {
@@ -26,6 +36,28 @@ export async function GET(
         });
 
         if (!hunt) {
+            return NextResponse.json(
+                {
+                    message: "Chasse introuvable.",
+                    error: "HUNT_NOT_FOUND",
+                },
+                { status: 404 },
+            );
+        }
+
+        if (hunt.isDeleted) {
+            return NextResponse.json(
+                {
+                    message: "Chasse introuvable.",
+                    error: "HUNT_NOT_FOUND",
+                },
+                { status: 404 },
+            );
+        }
+
+        const isOwner = currentUser?.id === hunt.createdById;
+
+        if (!isOwner && hunt.status !== HuntStatus.PUBLISHED) {
             return NextResponse.json(
                 {
                     message: "Chasse introuvable.",
@@ -57,6 +89,8 @@ export async function PATCH(
     { params }: RouteContext,
 ) {
     try {
+        const currentUser = await requireAuth();
+
         const { id } = await params;
         const body = await request.json();
 
@@ -75,11 +109,30 @@ export async function PATCH(
             );
         }
 
-        const existingHunt = await prisma.hunt.findUnique({
-            where: { id },
+        const updatedHunt = await updateHunt({
+            huntId: id,
+            currentUserId: currentUser.id,
+            data: validation.data,
         });
 
-        if (!existingHunt) {
+        return NextResponse.json({
+            message: "Chasse mise à jour avec succès.",
+            data: updatedHunt,
+        });
+    } catch (error) {
+        console.error("PATCH /api/hunts/[id] error:", error);
+
+        if (error instanceof AuthError) {
+            return NextResponse.json(
+                {
+                    message: error.message,
+                    error: error.code,
+                },
+                { status: error.status },
+            );
+        }
+
+        if (error instanceof HuntNotFoundError) {
             return NextResponse.json(
                 {
                     message: "Chasse introuvable.",
@@ -89,18 +142,25 @@ export async function PATCH(
             );
         }
 
-        const updatedHunt = await prisma.hunt.update({
-            where: { id },
-            data: validation.data,
-            include: huntInclude,
-        });
+        if (error instanceof HuntForbiddenError) {
+            return NextResponse.json(
+                {
+                    message: "Vous n'êtes pas autorisé à modifier cette chasse.",
+                    error: "FORBIDDEN_RESOURCE",
+                },
+                { status: 403 },
+            );
+        }
 
-        return NextResponse.json({
-            message: "Chasse mise à jour avec succès.",
-            data: updatedHunt,
-        });
-    } catch (error) {
-        console.error("PATCH /api/hunts/[id] error:", error);
+        if (error instanceof HuntNotEditableError) {
+            return NextResponse.json(
+                {
+                    message: "Cette chasse est publiée et ne peut plus être modifiée.",
+                    error: "HUNT_NOT_EDITABLE",
+                },
+                { status: 409 },
+            );
+        }
 
         if (error instanceof Prisma.PrismaClientKnownRequestError) {
             if (error.code === "P2003") {
@@ -139,13 +199,31 @@ export async function DELETE(
     { params }: RouteContext,
 ) {
     try {
+        const currentUser = await requireAuth();
         const { id } = await params;
 
-        const existingHunt = await prisma.hunt.findUnique({
-            where: { id },
+        await deleteHunt({
+            huntId: id,
+            currentUserId: currentUser.id,
         });
 
-        if (!existingHunt) {
+        return NextResponse.json({
+            message: "Chasse supprimée avec succès.",
+        });
+    } catch (error) {
+        console.error("DELETE /api/hunts/[id] error:", error);
+
+        if (error instanceof AuthError) {
+            return NextResponse.json(
+                {
+                    message: error.message,
+                    error: error.code,
+                },
+                { status: error.status },
+            );
+        }
+
+        if (error instanceof HuntNotFoundError) {
             return NextResponse.json(
                 {
                     message: "Chasse introuvable.",
@@ -155,15 +233,15 @@ export async function DELETE(
             );
         }
 
-        await prisma.hunt.delete({
-            where: { id },
-        });
-
-        return NextResponse.json({
-            message: "Chasse supprimée avec succès.",
-        });
-    } catch (error) {
-        console.error("DELETE /api/hunts/[id] error:", error);
+        if (error instanceof HuntForbiddenError) {
+            return NextResponse.json(
+                {
+                    message: "Vous n'êtes pas autorisé à supprimer cette chasse.",
+                    error: "FORBIDDEN_RESOURCE",
+                },
+                { status: 403 },
+            );
+        }
 
         return NextResponse.json(
             {

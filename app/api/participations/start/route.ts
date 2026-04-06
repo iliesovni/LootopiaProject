@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
         const participation = await startParticipation({
             userId: user.id,
             huntId: validation.data.huntId,
+            accessCode: validation.data.accessCode ?? null,
         });
 
         return NextResponse.json(
