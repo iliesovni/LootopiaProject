@@ -13,6 +13,8 @@ export class ParticipationError extends Error {
     }
 }
 
+const MAX_ACCESS_CODE_ATTEMPTS = 10;
+
 type ClueLike = {
     content: string;
     penaltyPoints: number;
@@ -153,12 +155,7 @@ export function getTargetStepProgress(
     };
 }
 
-async function validateStartParticipation(
-    tx: Prisma.TransactionClient,
-    userId: string,
-    huntId: string,
-    accessCode?: string | null,
-): Promise<StartableHunt> {
+async function validateStartParticipation(tx: Prisma.TransactionClient, userId: string, huntId: string, accessCode?: string | null): Promise<StartableHunt> {
     const user = await tx.user.findUnique({
         where: { id: userId },
         select: {
@@ -203,14 +200,28 @@ async function validateStartParticipation(
         throw new ParticipationError("HUNT_NOT_PUBLISHED");
     }
 
+    const accessAttempt = await getAccessAttempt(tx, userId, huntId);
+
+    if (hunt.visibility === HuntVisibility.PRIVATE && accessAttempt && accessAttempt.failedAttempts >= MAX_ACCESS_CODE_ATTEMPTS) {
+        throw new ParticipationError("ACCESS_CODE_ATTEMPTS_EXCEEDED");
+    }
+
     if (hunt.visibility === HuntVisibility.PRIVATE) {
         if (!accessCode) {
             throw new ParticipationError("ACCESS_CODE_REQUIRED");
         }
 
         if (hunt.accessCode !== accessCode) {
+            const updatedAttempt = await registerFailedAccessAttempt(tx, userId, huntId);
+
+            if (updatedAttempt.failedAttempts >= MAX_ACCESS_CODE_ATTEMPTS) {
+                throw new ParticipationError("ACCESS_CODE_ATTEMPTS_EXCEEDED");
+            }
+
             throw new ParticipationError("INVALID_ACCESS_CODE");
         }
+
+        await clearAccessAttempts(tx, userId, huntId);
     }
 
     if (hunt.steps.length === 0) {
@@ -516,6 +527,54 @@ function buildParticipationGameplayView(participation: ParticipationPublicView) 
     };
 }
 
+async function getAccessAttempt(tx: Prisma.TransactionClient, userId: string, huntId: string) {
+    return tx.huntAccessAttempt.findUnique({
+        where: {
+            userId_huntId: {
+                userId,
+                huntId,
+            },
+        },
+        select: {
+            id: true,
+            failedAttempts: true,
+        },
+    });
+}
+
+async function registerFailedAccessAttempt(tx: Prisma.TransactionClient, userId: string, huntId: string) {
+    return tx.huntAccessAttempt.upsert({
+        where: {
+            userId_huntId: {
+                userId,
+                huntId,
+            },
+        },
+        create: {
+            userId,
+            huntId,
+            failedAttempts: 1,
+        },
+        update: {
+            failedAttempts: {
+                increment: 1,
+            },
+        },
+        select: {
+            failedAttempts: true,
+        },
+    });
+}
+
+async function clearAccessAttempts(tx: Prisma.TransactionClient, userId: string, huntId: string) {
+    await tx.huntAccessAttempt.deleteMany({
+        where: {
+            userId,
+            huntId,
+        },
+    });
+}
+
 export function mapParticipationError(error: unknown) {
     if (error instanceof ParticipationError) {
         switch (error.message) {
@@ -679,6 +738,15 @@ export function mapParticipationError(error: unknown) {
                         error: "PARTICIPATION_HAS_REMAINING_STEPS",
                     },
                     { status: 409 },
+                );
+
+            case "ACCESS_CODE_ATTEMPTS_EXCEEDED":
+                return NextResponse.json(
+                    {
+                        message: "Le nombre maximum de tentatives pour ce code d'accès a été atteint.",
+                        error: "ACCESS_CODE_ATTEMPTS_EXCEEDED",
+                    },
+                    { status: 403 },
                 );
         }
     }
