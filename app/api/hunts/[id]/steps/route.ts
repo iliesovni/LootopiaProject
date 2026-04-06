@@ -1,15 +1,8 @@
 import { apiValidationError } from "@/lib/api/validation";
 import { AuthError } from "@/lib/auth/current-user";
 import { requireAuth } from "@/lib/auth/guards";
-import {
-    createStep,
-    HuntNotFoundError,
-    InvalidStepOrderError,
-    StepForbiddenError,
-    StepNotEditableError,
-} from "@/lib/services/step.service";
+import { createStep, mapStepError } from "@/lib/services/step.service";
 import { createStepSchema } from "@/schemas/step";
-import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 type RouteContext = {
@@ -52,6 +45,9 @@ export async function POST(
     } catch (error) {
         console.error("POST /api/hunts/[id]/steps error:", error);
 
+        const mapped = mapStepError(error);
+        if (mapped) return mapped;
+
         if (error instanceof AuthError) {
             return NextResponse.json(
                 {
@@ -60,58 +56,6 @@ export async function POST(
                 },
                 { status: error.status },
             );
-        }
-
-        if (error instanceof HuntNotFoundError) {
-            return NextResponse.json(
-                {
-                    message: "Chasse introuvable.",
-                    error: "HUNT_NOT_FOUND",
-                },
-                { status: 404 },
-            );
-        }
-
-        if (error instanceof StepForbiddenError) {
-            return NextResponse.json(
-                {
-                    message: "Vous n'êtes pas autorisé à modifier cette chasse.",
-                    error: "FORBIDDEN_RESOURCE",
-                },
-                { status: 403 },
-            );
-        }
-
-        if (error instanceof StepNotEditableError) {
-            return NextResponse.json(
-                {
-                    message: "Cette chasse est publiée et ne peut plus être modifiée.",
-                    error: "HUNT_NOT_EDITABLE",
-                },
-                { status: 409 },
-            );
-        }
-
-        if (error instanceof InvalidStepOrderError) {
-            return NextResponse.json(
-                {
-                    message: "Une étape avec ce numéro d'ordre existe déjà dans cette chasse.",
-                    error: "INVALID_STEP_ORDER",
-                },
-                { status: 409 },
-            );
-        }
-
-        if (error instanceof Prisma.PrismaClientKnownRequestError) {
-            if (error.code === "P2003") {
-                return NextResponse.json(
-                    {
-                        message: "La chasse indiquée n'existe pas.",
-                        error: "HUNT_NOT_FOUND",
-                    },
-                    { status: 400 },
-                );
-            }
         }
 
         return NextResponse.json(

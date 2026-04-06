@@ -1,16 +1,7 @@
 import { AuthError, getOptionalCurrentUser } from "@/lib/auth/current-user";
 import { requireAuth } from "@/lib/auth/guards";
-import { huntOwnerDetailSelect, huntPublicDetailSelect } from "@/lib/db/includes/hunt.include";
-import { prisma } from "@/lib/db/prisma";
-import {
-    deleteHunt,
-    HuntForbiddenError,
-    HuntNotEditableError,
-    HuntNotFoundError,
-    updateHunt,
-} from "@/lib/services/hunt.service";
+import { deleteHunt, getHuntById, mapHuntError, updateHunt } from "@/lib/services/hunt.service";
 import { updateHuntSchema } from "@/schemas/hunt";
-import { HuntStatus, Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -28,51 +19,9 @@ export async function GET(
         const { id } = await params;
         const currentUser = await getOptionalCurrentUser();
 
-        const baseHunt = await prisma.hunt.findUnique({
-            where: { id },
-            select: {
-                id: true,
-                createdById: true,
-                status: true,
-                isDeleted: true,
-            },
-        });
-
-        if (!baseHunt) {
-            return NextResponse.json(
-                {
-                    message: "Chasse introuvable.",
-                    error: "HUNT_NOT_FOUND",
-                },
-                { status: 404 },
-            );
-        }
-
-        if (baseHunt.isDeleted) {
-            return NextResponse.json(
-                {
-                    message: "Chasse introuvable.",
-                    error: "HUNT_NOT_FOUND",
-                },
-                { status: 404 },
-            );
-        }
-
-        const isOwner = currentUser?.id === baseHunt.createdById;
-
-        if (!isOwner && baseHunt.status !== HuntStatus.PUBLISHED) {
-            return NextResponse.json(
-                {
-                    message: "Chasse introuvable.",
-                    error: "HUNT_NOT_FOUND",
-                },
-                { status: 404 },
-            );
-        }
-
-        const hunt = await prisma.hunt.findUnique({
-            where: { id },
-            select: isOwner ? huntOwnerDetailSelect : huntPublicDetailSelect,
+        const hunt = await getHuntById({
+            huntId: id,
+            currentUserId: currentUser?.id,
         });
 
         return NextResponse.json({
@@ -80,7 +29,10 @@ export async function GET(
             data: hunt,
         });
     } catch (error) {
-        console.error("GET /api/hunts/[id] error:", error);
+        console.error("[HUNT_ERROR]", error);
+
+        const mapped = mapHuntError(error);
+        if (mapped) return mapped;
 
         return NextResponse.json(
             {
@@ -130,6 +82,9 @@ export async function PATCH(
     } catch (error) {
         console.error("PATCH /api/hunts/[id] error:", error);
 
+        const mapped = mapHuntError(error);
+        if (mapped) return mapped;
+
         if (error instanceof AuthError) {
             return NextResponse.json(
                 {
@@ -138,58 +93,6 @@ export async function PATCH(
                 },
                 { status: error.status },
             );
-        }
-
-        if (error instanceof HuntNotFoundError) {
-            return NextResponse.json(
-                {
-                    message: "Chasse introuvable.",
-                    error: "HUNT_NOT_FOUND",
-                },
-                { status: 404 },
-            );
-        }
-
-        if (error instanceof HuntForbiddenError) {
-            return NextResponse.json(
-                {
-                    message: "Vous n'êtes pas autorisé à modifier cette chasse.",
-                    error: "FORBIDDEN_RESOURCE",
-                },
-                { status: 403 },
-            );
-        }
-
-        if (error instanceof HuntNotEditableError) {
-            return NextResponse.json(
-                {
-                    message: "Cette chasse est publiée et ne peut plus être modifiée.",
-                    error: "HUNT_NOT_EDITABLE",
-                },
-                { status: 409 },
-            );
-        }
-
-        if (error instanceof Prisma.PrismaClientKnownRequestError) {
-            if (error.code === "P2003") {
-                return NextResponse.json(
-                    {
-                        message: "Une relation fournie est invalide.",
-                        error: "INVALID_REFERENCE_ID",
-                    },
-                    { status: 400 },
-                );
-            }
-
-            if (error.code === "P2025") {
-                return NextResponse.json(
-                    {
-                        message: "Chasse introuvable.",
-                        error: "HUNT_NOT_FOUND",
-                    },
-                    { status: 404 },
-                );
-            }
         }
 
         return NextResponse.json(
@@ -221,6 +124,9 @@ export async function DELETE(
     } catch (error) {
         console.error("DELETE /api/hunts/[id] error:", error);
 
+        const mapped = mapHuntError(error);
+        if (mapped) return mapped;
+
         if (error instanceof AuthError) {
             return NextResponse.json(
                 {
@@ -228,26 +134,6 @@ export async function DELETE(
                     error: error.code,
                 },
                 { status: error.status },
-            );
-        }
-
-        if (error instanceof HuntNotFoundError) {
-            return NextResponse.json(
-                {
-                    message: "Chasse introuvable.",
-                    error: "HUNT_NOT_FOUND",
-                },
-                { status: 404 },
-            );
-        }
-
-        if (error instanceof HuntForbiddenError) {
-            return NextResponse.json(
-                {
-                    message: "Vous n'êtes pas autorisé à supprimer cette chasse.",
-                    error: "FORBIDDEN_RESOURCE",
-                },
-                { status: 403 },
             );
         }
 

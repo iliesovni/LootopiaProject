@@ -1,6 +1,7 @@
 import { clueOwnerDetailSelect } from "@/lib/db/includes/clue.include";
 import { prisma } from "@/lib/db/prisma";
 import { HuntStatus, Prisma } from "@prisma/client";
+import { NextResponse } from "next/server";
 
 export class ClueNotFoundError extends Error {
     constructor() {
@@ -316,4 +317,68 @@ export async function deleteClue({ clueId, currentUserId }: DeleteClueInput) {
             },
         });
     });
+}
+
+export function mapClueError(error: unknown) {
+    if (error instanceof StepNotFoundError) {
+        return NextResponse.json(
+            {
+                message: "Étape introuvable.",
+                error: "STEP_NOT_FOUND",
+            },
+            { status: 404 },
+        );
+    }
+
+    if (error instanceof ClueNotFoundError) {
+        return NextResponse.json(
+            {
+                message: "Indice introuvable.",
+                error: "CLUE_NOT_FOUND",
+            },
+            { status: 404 },
+        );
+    }
+
+    if (error instanceof ClueForbiddenError) {
+        return NextResponse.json(
+            {
+                message: "Accès refusé à cet indice.",
+                error: "CLUE_FORBIDDEN",
+            },
+            { status: 403 },
+        );
+    }
+
+    if (error instanceof ClueNotEditableError) {
+        return NextResponse.json(
+            {
+                message: "Cette chasse est publiée et ne peut plus être modifiée.",
+                error: "HUNT_NOT_EDITABLE",
+            },
+            { status: 409 },
+        );
+    }
+
+    if (error instanceof ClueOrderConflictError) {
+        return NextResponse.json(
+            {
+                message: "Un indice existe déjà à cet ordre pour cette étape.",
+                error: "CLUE_ORDER_CONFLICT",
+            },
+            { status: 409 },
+        );
+    }
+
+    if (error instanceof ClueLimitReachedError) {
+        return NextResponse.json(
+            {
+                message: "Une étape ne peut pas contenir plus de 3 indices.",
+                error: "CLUE_LIMIT_REACHED",
+            },
+            { status: 409 },
+        );
+    }
+
+    return null;
 }

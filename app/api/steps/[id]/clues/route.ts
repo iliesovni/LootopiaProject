@@ -1,6 +1,6 @@
 import { AuthError } from "@/lib/auth/current-user";
 import { requireAuth } from "@/lib/auth/guards";
-import { listCluesForStep, StepForbiddenError, StepNotFoundError } from "@/lib/services/step.service";
+import { listCluesForStep, mapStepError } from "@/lib/services/step.service";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -26,6 +26,9 @@ export async function GET(
     } catch (error) {
         console.error("GET /api/steps/[id]/clues error:", error);
 
+        const mapped = mapStepError(error);
+        if (mapped) return mapped;
+
         if (error instanceof AuthError) {
             return NextResponse.json(
                 {
@@ -33,26 +36,6 @@ export async function GET(
                     error: error.code,
                 },
                 { status: error.status },
-            );
-        }
-
-        if (error instanceof StepNotFoundError) {
-            return NextResponse.json(
-                {
-                    message: "Étape introuvable.",
-                    error: "STEP_NOT_FOUND",
-                },
-                { status: 404 },
-            );
-        }
-
-        if (error instanceof StepForbiddenError) {
-            return NextResponse.json(
-                {
-                    message: "Vous n'avez pas accès à cette étape.",
-                    error: "FORBIDDEN_RESOURCE",
-                },
-                { status: 403 },
             );
         }
 

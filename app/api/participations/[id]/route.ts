@@ -25,7 +25,7 @@ export async function GET(
 
         const mapped = mapParticipationError(error);
         if (mapped) return mapped;
-        
+
         if (error instanceof AuthError) {
             return NextResponse.json(
                 {

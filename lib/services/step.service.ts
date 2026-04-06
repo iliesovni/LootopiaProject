@@ -2,6 +2,7 @@ import { clueOwnerDetailSelect } from "@/lib/db/includes/clue.include";
 import { stepOwnerDetailSelect, stepPublicSelect } from "@/lib/db/includes/step.include";
 import { prisma } from "@/lib/db/prisma";
 import { HuntStatus, ParticipationStatus, Prisma } from "@prisma/client";
+import { NextResponse } from "next/server";
 
 export class StepNotFoundError extends Error {
     constructor() {
@@ -392,4 +393,58 @@ export async function listCluesForStep({ stepId, currentUserId }: ListStepCluesI
             orderIndex: "asc",
         },
     });
+}
+
+export function mapStepError(error: unknown) {
+    if (error instanceof HuntNotFoundError) {
+        return NextResponse.json(
+            {
+                message: "Chasse introuvable.",
+                error: "HUNT_NOT_FOUND",
+            },
+            { status: 404 },
+        );
+    }
+
+    if (error instanceof StepNotFoundError) {
+        return NextResponse.json(
+            {
+                message: "Étape introuvable.",
+                error: "STEP_NOT_FOUND",
+            },
+            { status: 404 },
+        );
+    }
+
+    if (error instanceof StepForbiddenError) {
+        return NextResponse.json(
+            {
+                message: "Accès refusé à cette étape.",
+                error: "STEP_FORBIDDEN",
+            },
+            { status: 403 },
+        );
+    }
+
+    if (error instanceof StepNotEditableError) {
+        return NextResponse.json(
+            {
+                message: "Cette chasse est publiée et ne peut plus être modifiée.",
+                error: "HUNT_NOT_EDITABLE",
+            },
+            { status: 409 },
+        );
+    }
+
+    if (error instanceof InvalidStepOrderError) {
+        return NextResponse.json(
+            {
+                message: "Une étape avec ce numéro d'ordre existe déjà dans cette chasse.",
+                error: "INVALID_STEP_ORDER",
+            },
+            { status: 409 },
+        );
+    }
+
+    return null;
 }

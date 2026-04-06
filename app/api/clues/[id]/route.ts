@@ -1,16 +1,8 @@
 import { apiValidationError } from "@/lib/api/validation";
 import { AuthError } from "@/lib/auth/current-user";
 import { requireAuth } from "@/lib/auth/guards";
-import {
-    ClueForbiddenError,
-    ClueNotEditableError,
-    ClueNotFoundError,
-    deleteClue,
-    getClueById,
-    updateClue,
-} from "@/lib/services/clue.service";
+import { deleteClue, getClueById, mapClueError, updateClue } from "@/lib/services/clue.service";
 import { updateClueSchema } from "@/schemas/clue";
-import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 type RouteContext = {
@@ -39,6 +31,9 @@ export async function GET(
     } catch (error) {
         console.error("GET /api/clues/[id] error:", error);
 
+        const mapped = mapClueError(error);
+        if (mapped) return mapped;
+
         if (error instanceof AuthError) {
             return NextResponse.json(
                 {
@@ -46,26 +41,6 @@ export async function GET(
                     error: error.code,
                 },
                 { status: error.status },
-            );
-        }
-
-        if (error instanceof ClueNotFoundError) {
-            return NextResponse.json(
-                {
-                    message: "Indice introuvable.",
-                    error: "CLUE_NOT_FOUND",
-                },
-                { status: 404 },
-            );
-        }
-
-        if (error instanceof ClueForbiddenError) {
-            return NextResponse.json(
-                {
-                    message: "Vous n'avez pas accès à cet indice.",
-                    error: "FORBIDDEN_RESOURCE",
-                },
-                { status: 403 },
             );
         }
 
@@ -107,6 +82,9 @@ export async function PATCH(
     } catch (error) {
         console.error("PATCH /api/clues/[id] error:", error);
 
+        const mapped = mapClueError(error);
+        if (mapped) return mapped;
+
         if (error instanceof AuthError) {
             return NextResponse.json(
                 {
@@ -114,49 +92,6 @@ export async function PATCH(
                     error: error.code,
                 },
                 { status: error.status },
-            );
-        }
-
-        if (error instanceof ClueNotFoundError) {
-            return NextResponse.json(
-                {
-                    message: "Indice introuvable.",
-                    error: "CLUE_NOT_FOUND",
-                },
-                { status: 404 },
-            );
-        }
-
-        if (error instanceof ClueForbiddenError) {
-            return NextResponse.json(
-                {
-                    message: "Vous n'êtes pas autorisé à modifier cet indice.",
-                    error: "FORBIDDEN_RESOURCE",
-                },
-                { status: 403 },
-            );
-        }
-
-        if (error instanceof ClueNotEditableError) {
-            return NextResponse.json(
-                {
-                    message: "Cette chasse est publiée et ne peut plus être modifiée.",
-                    error: "HUNT_NOT_EDITABLE",
-                },
-                { status: 409 },
-            );
-        }
-
-        if (
-            error instanceof Prisma.PrismaClientKnownRequestError &&
-            error.code === "P2025"
-        ) {
-            return NextResponse.json(
-                {
-                    message: "Indice introuvable.",
-                    error: "CLUE_NOT_FOUND",
-                },
-                { status: 404 },
             );
         }
 
@@ -189,6 +124,9 @@ export async function DELETE(
     } catch (error) {
         console.error("DELETE /api/clues/[id] error:", error);
 
+        const mapped = mapClueError(error);
+        if (mapped) return mapped;
+
         if (error instanceof AuthError) {
             return NextResponse.json(
                 {
@@ -196,36 +134,6 @@ export async function DELETE(
                     error: error.code,
                 },
                 { status: error.status },
-            );
-        }
-
-        if (error instanceof ClueNotFoundError) {
-            return NextResponse.json(
-                {
-                    message: "Indice introuvable.",
-                    error: "CLUE_NOT_FOUND",
-                },
-                { status: 404 },
-            );
-        }
-
-        if (error instanceof ClueForbiddenError) {
-            return NextResponse.json(
-                {
-                    message: "Vous n'êtes pas autorisé à supprimer cet indice.",
-                    error: "FORBIDDEN_RESOURCE",
-                },
-                { status: 403 },
-            );
-        }
-
-        if (error instanceof ClueNotEditableError) {
-            return NextResponse.json(
-                {
-                    message: "Cette chasse est publiée et ne peut plus être modifiée.",
-                    error: "HUNT_NOT_EDITABLE",
-                },
-                { status: 409 },
             );
         }
 

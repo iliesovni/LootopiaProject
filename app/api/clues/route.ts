@@ -1,16 +1,8 @@
 import { apiValidationError } from "@/lib/api/validation";
 import { AuthError } from "@/lib/auth/current-user";
 import { requireAuth } from "@/lib/auth/guards";
-import {
-    ClueForbiddenError,
-    ClueLimitReachedError,
-    ClueNotEditableError,
-    ClueOrderConflictError,
-    createClue,
-    StepNotFoundError,
-} from "@/lib/services/clue.service";
+import { createClue, mapClueError } from "@/lib/services/clue.service";
 import { createClueSchema } from "@/schemas/clue";
-import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
@@ -39,6 +31,9 @@ export async function POST(request: NextRequest) {
     } catch (error) {
         console.error("POST /api/clues error:", error);
 
+        const mapped = mapClueError(error);
+        if (mapped) return mapped;
+
         if (error instanceof AuthError) {
             return NextResponse.json(
                 {
@@ -46,69 +41,6 @@ export async function POST(request: NextRequest) {
                     error: error.code,
                 },
                 { status: error.status },
-            );
-        }
-
-        if (error instanceof StepNotFoundError) {
-            return NextResponse.json(
-                {
-                    message: "Étape introuvable.",
-                    error: "STEP_NOT_FOUND",
-                },
-                { status: 404 },
-            );
-        }
-
-        if (error instanceof ClueForbiddenError) {
-            return NextResponse.json(
-                {
-                    message: "Vous n'êtes pas autorisé à modifier cette étape.",
-                    error: "FORBIDDEN_RESOURCE",
-                },
-                { status: 403 },
-            );
-        }
-
-        if (error instanceof ClueNotEditableError) {
-            return NextResponse.json(
-                {
-                    message: "Cette chasse est publiée et ne peut plus être modifiée.",
-                    error: "HUNT_NOT_EDITABLE",
-                },
-                { status: 409 },
-            );
-        }
-
-        if (error instanceof ClueOrderConflictError) {
-            return NextResponse.json(
-                {
-                    message: "Un indice existe déjà à cet ordre pour cette étape.",
-                    error: "CLUE_ORDER_CONFLICT",
-                },
-                { status: 409 },
-            );
-        }
-
-        if (error instanceof ClueLimitReachedError) {
-            return NextResponse.json(
-                {
-                    message: "Une étape ne peut pas contenir plus de 3 indices.",
-                    error: "CLUE_LIMIT_REACHED",
-                },
-                { status: 409 },
-            );
-        }
-
-        if (
-            error instanceof Prisma.PrismaClientKnownRequestError &&
-            error.code === "P2003"
-        ) {
-            return NextResponse.json(
-                {
-                    message: "La step fournie est invalide.",
-                    error: "INVALID_STEP_ID",
-                },
-                { status: 400 },
             );
         }
 
