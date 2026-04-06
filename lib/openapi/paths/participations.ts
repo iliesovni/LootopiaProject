@@ -1,30 +1,37 @@
 import {
+    CompleteStepRequestSchema,
     CompleteStepResponseSchema,
     ErrorResponseSchema,
-    ParticipationFinishResponseSchema,
-    ParticipationResponseSchema,
-    ParticipationStartResponseSchema,
+    ParticipationGameplayResponseSchema,
+    StartParticipationRequestSchema,
+    UseClueRequestSchema,
     UseClueResponseSchema,
-    uuidParam,
     ValidationErrorResponseSchema,
 } from "@/lib/openapi/components";
 import { registry } from "@/lib/openapi/registry";
-import { completeStepSchema, startParticipationSchema, useClueSchema } from "@/schemas/participation";
 import { z } from "zod";
 
-const participationIdParam = uuidParam("id", "Identifiant de la participation");
-
-const StartParticipationRequestSchema = startParticipationSchema.openapi("StartParticipationRequest");
-const CompleteStepRequestSchema = completeStepSchema.openapi("CompleteStepRequest");
-const UseClueRequestSchema = useClueSchema.openapi("UseClueRequest");
+const participationIdParam = z.object({
+    id: z.uuid().openapi({
+        param: {
+            name: "id",
+            in: "path",
+            required: true,
+            description: "Identifiant de la participation",
+        },
+        example: "44444444-4444-4444-4444-444444444444",
+    }),
+});
 
 registry.registerPath({
     method: "post",
     path: "/api/participations/start",
     tags: ["Participations"],
     summary: "Démarrer une participation",
+    security: [{ cookieAuth: [] }],
     request: {
         body: {
+            required: true,
             content: {
                 "application/json": {
                     schema: StartParticipationRequestSchema,
@@ -34,23 +41,31 @@ registry.registerPath({
     },
     responses: {
         201: {
-            description: "Participation démarrée.",
+            description: "Participation démarrée avec succès.",
             content: {
                 "application/json": {
-                    schema: ParticipationStartResponseSchema,
+                    schema: ParticipationGameplayResponseSchema,
                 },
             },
         },
         400: {
-            description: "Payload invalide ou relation invalide.",
+            description: "Payload invalide ou hunt sans étape.",
             content: {
                 "application/json": {
-                    schema: z.union([ValidationErrorResponseSchema, ErrorResponseSchema]),
+                    schema: ValidationErrorResponseSchema,
+                },
+            },
+        },
+        401: {
+            description: "Non authentifié.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
                 },
             },
         },
         403: {
-            description: "Utilisateur non autorisé ou chasse non accessible.",
+            description: "Accès interdit ou access code invalide.",
             content: {
                 "application/json": {
                     schema: ErrorResponseSchema,
@@ -66,7 +81,7 @@ registry.registerPath({
             },
         },
         409: {
-            description: "Participation déjà existante.",
+            description: "Conflit métier (déjà existante, hunt non publiée, etc.).",
             content: {
                 "application/json": {
                     schema: ErrorResponseSchema,
@@ -88,18 +103,33 @@ registry.registerPath({
     method: "get",
     path: "/api/participations/{id}",
     tags: ["Participations"],
-    summary: "Récupérer une participation",
+    summary: "Récupérer une participation (vue gameplay)",
+    security: [{ cookieAuth: [] }],
     request: {
-        params: z.object({
-            id: participationIdParam,
-        }),
+        params: participationIdParam,
     },
     responses: {
         200: {
-            description: "Participation trouvée.",
+            description: "Participation récupérée avec succès.",
             content: {
                 "application/json": {
-                    schema: ParticipationResponseSchema,
+                    schema: ParticipationGameplayResponseSchema,
+                },
+            },
+        },
+        401: {
+            description: "Non authentifié.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+        403: {
+            description: "Accès interdit.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
                 },
             },
         },
@@ -127,11 +157,11 @@ registry.registerPath({
     path: "/api/participations/{id}/use-clue",
     tags: ["Participations"],
     summary: "Utiliser un indice",
+    security: [{ cookieAuth: [] }],
     request: {
-        params: z.object({
-            id: participationIdParam,
-        }),
+        params: participationIdParam,
         body: {
+            required: true,
             content: {
                 "application/json": {
                     schema: UseClueRequestSchema,
@@ -141,7 +171,7 @@ registry.registerPath({
     },
     responses: {
         200: {
-            description: "Indice utilisé.",
+            description: "Indice utilisé avec succès.",
             content: {
                 "application/json": {
                     schema: UseClueResponseSchema,
@@ -156,6 +186,22 @@ registry.registerPath({
                 },
             },
         },
+        401: {
+            description: "Non authentifié.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+        403: {
+            description: "Accès interdit.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
         404: {
             description: "Participation ou étape introuvable.",
             content: {
@@ -165,7 +211,7 @@ registry.registerPath({
             },
         },
         409: {
-            description: "Conflit métier : étape hors ordre, déjà complétée, plus d'indice disponible, etc.",
+            description: "Conflit métier (ordre, étape, indices).",
             content: {
                 "application/json": {
                     schema: ErrorResponseSchema,
@@ -188,11 +234,11 @@ registry.registerPath({
     path: "/api/participations/{id}/complete-step",
     tags: ["Participations"],
     summary: "Compléter une étape",
+    security: [{ cookieAuth: [] }],
     request: {
-        params: z.object({
-            id: participationIdParam,
-        }),
+        params: participationIdParam,
         body: {
+            required: true,
             content: {
                 "application/json": {
                     schema: CompleteStepRequestSchema,
@@ -202,7 +248,7 @@ registry.registerPath({
     },
     responses: {
         200: {
-            description: "Étape complétée.",
+            description: "Étape complétée avec succès.",
             content: {
                 "application/json": {
                     schema: CompleteStepResponseSchema,
@@ -214,6 +260,22 @@ registry.registerPath({
             content: {
                 "application/json": {
                     schema: ValidationErrorResponseSchema,
+                },
+            },
+        },
+        401: {
+            description: "Non authentifié.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+        403: {
+            description: "Accès interdit.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
                 },
             },
         },
@@ -249,17 +311,32 @@ registry.registerPath({
     path: "/api/participations/{id}/finish",
     tags: ["Participations"],
     summary: "Terminer une participation",
+    security: [{ cookieAuth: [] }],
     request: {
-        params: z.object({
-            id: participationIdParam,
-        }),
+        params: participationIdParam,
     },
     responses: {
         200: {
-            description: "Participation terminée.",
+            description: "Participation terminée avec succès.",
             content: {
                 "application/json": {
-                    schema: ParticipationFinishResponseSchema,
+                    schema: ParticipationGameplayResponseSchema,
+                },
+            },
+        },
+        401: {
+            description: "Non authentifié.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+        403: {
+            description: "Accès interdit.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
                 },
             },
         },

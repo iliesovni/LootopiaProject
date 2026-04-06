@@ -1,50 +1,24 @@
 import {
-    ClueListResponseSchema,
-    ClueWithStepSchema,
+    ClueCreatedResponseSchema,
+    ClueResponseSchema,
+    ClueUpdatedResponseSchema,
+    CreateClueRequestSchema,
     ErrorResponseSchema,
-    MessageOnlyResponseSchema,
-    uuidParam,
     ValidationErrorResponseSchema,
 } from "@/lib/openapi/components";
 import { registry } from "@/lib/openapi/registry";
-import { createClueSchema, updateClueSchema } from "@/schemas/clue";
 import { z } from "zod";
 
-const clueIdParam = uuidParam("id", "Identifiant de l'indice");
-
-const CreateClueRequestSchema = createClueSchema.openapi("CreateClueRequest");
-const UpdateClueRequestSchema = updateClueSchema.openapi("UpdateClueRequest");
-
-const ClueResponseSchema = z
-.object({
-    message: z.string(),
-    data: ClueWithStepSchema,
-})
-.openapi("ClueResponse");
-
-registry.registerPath({
-    method: "get",
-    path: "/api/clues",
-    tags: ["Clues"],
-    summary: "Lister les indices",
-    responses: {
-        200: {
-            description: "Liste des indices.",
-            content: {
-                "application/json": {
-                    schema: ClueListResponseSchema,
-                },
-            },
+const clueIdParam = z.object({
+    id: z.string().uuid().openapi({
+        param: {
+            name: "id",
+            in: "path",
+            required: true,
+            description: "Identifiant de l'indice",
         },
-        500: {
-            description: "Erreur serveur.",
-            content: {
-                "application/json": {
-                    schema: ErrorResponseSchema,
-                },
-            },
-        },
-    },
+        example: "33333333-3333-3333-3333-333333333333",
+    }),
 });
 
 registry.registerPath({
@@ -52,8 +26,10 @@ registry.registerPath({
     path: "/api/clues",
     tags: ["Clues"],
     summary: "Créer un indice",
+    security: [{ cookieAuth: [] }],
     request: {
         body: {
+            required: true,
             content: {
                 "application/json": {
                     schema: CreateClueRequestSchema,
@@ -63,23 +39,39 @@ registry.registerPath({
     },
     responses: {
         201: {
-            description: "Indice créé.",
+            description: "Indice créé avec succès.",
             content: {
                 "application/json": {
-                    schema: ClueResponseSchema,
+                    schema: ClueCreatedResponseSchema,
                 },
             },
         },
         400: {
-            description: "Payload invalide ou référence invalide.",
+            description: "Payload invalide.",
             content: {
                 "application/json": {
-                    schema: z.union([ValidationErrorResponseSchema, ErrorResponseSchema]),
+                    schema: ValidationErrorResponseSchema,
+                },
+            },
+        },
+        401: {
+            description: "Non authentifié.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+        403: {
+            description: "Accès interdit.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
                 },
             },
         },
         404: {
-            description: "Step introuvable.",
+            description: "Étape introuvable.",
             content: {
                 "application/json": {
                     schema: ErrorResponseSchema,
@@ -87,7 +79,7 @@ registry.registerPath({
             },
         },
         409: {
-            description: "Conflit d'ordre sur l'indice.",
+            description: "Conflit métier (limite, ordre, hunt publiée).",
             content: {
                 "application/json": {
                     schema: ErrorResponseSchema,
@@ -110,17 +102,32 @@ registry.registerPath({
     path: "/api/clues/{id}",
     tags: ["Clues"],
     summary: "Récupérer un indice",
+    security: [{ cookieAuth: [] }],
     request: {
-        params: z.object({
-            id: clueIdParam,
-        }),
+        params: clueIdParam,
     },
     responses: {
         200: {
-            description: "Indice trouvé.",
+            description: "Indice récupéré.",
             content: {
                 "application/json": {
                     schema: ClueResponseSchema,
+                },
+            },
+        },
+        401: {
+            description: "Non authentifié.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+        403: {
+            description: "Accès interdit.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
                 },
             },
         },
@@ -148,24 +155,24 @@ registry.registerPath({
     path: "/api/clues/{id}",
     tags: ["Clues"],
     summary: "Mettre à jour un indice",
+    security: [{ cookieAuth: [] }],
     request: {
-        params: z.object({
-            id: clueIdParam,
-        }),
+        params: clueIdParam,
         body: {
+            required: true,
             content: {
                 "application/json": {
-                    schema: UpdateClueRequestSchema,
+                    schema: CreateClueRequestSchema.partial().openapi("PatchClueBody"),
                 },
             },
         },
     },
     responses: {
         200: {
-            description: "Indice mis à jour.",
+            description: "Indice mis à jour avec succès.",
             content: {
                 "application/json": {
-                    schema: ClueResponseSchema,
+                    schema: ClueUpdatedResponseSchema,
                 },
             },
         },
@@ -177,8 +184,32 @@ registry.registerPath({
                 },
             },
         },
+        401: {
+            description: "Non authentifié.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+        403: {
+            description: "Accès interdit.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
         404: {
             description: "Indice introuvable.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+        409: {
+            description: "Conflit métier.",
             content: {
                 "application/json": {
                     schema: ErrorResponseSchema,
@@ -201,22 +232,50 @@ registry.registerPath({
     path: "/api/clues/{id}",
     tags: ["Clues"],
     summary: "Supprimer un indice",
+    security: [{ cookieAuth: [] }],
     request: {
-        params: z.object({
-            id: clueIdParam,
-        }),
+        params: clueIdParam,
     },
     responses: {
         200: {
             description: "Indice supprimé.",
             content: {
                 "application/json": {
-                    schema: MessageOnlyResponseSchema,
+                    schema: {
+                        type: "object",
+                        properties: {
+                            message: { type: "string", example: "Indice supprimé avec succès." },
+                        },
+                    },
+                },
+            },
+        },
+        401: {
+            description: "Non authentifié.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+        403: {
+            description: "Accès interdit.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
                 },
             },
         },
         404: {
             description: "Indice introuvable.",
+            content: {
+                "application/json": {
+                    schema: ErrorResponseSchema,
+                },
+            },
+        },
+        409: {
+            description: "Conflit métier.",
             content: {
                 "application/json": {
                     schema: ErrorResponseSchema,
