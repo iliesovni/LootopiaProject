@@ -1,4 +1,5 @@
-import { stepInclude } from "@/lib/db/includes/step.include";
+import { clueOwnerDetailSelect } from "@/lib/db/includes/clue.include";
+import { stepOwnerDetailSelect, stepPublicSelect } from "@/lib/db/includes/step.include";
 import { prisma } from "@/lib/db/prisma";
 import { HuntStatus, ParticipationStatus, Prisma } from "@prisma/client";
 
@@ -160,6 +161,7 @@ async function assertReadableStep(stepId: string, currentUserId: string) {
     return step;
 }
 
+// TODO: endpoint à revoir → ne devrait probablement pas exposer toutes les steps globalement
 export async function listAccessibleSteps({ currentUserId }: ListAccessibleStepsInput) {
     return prisma.step.findMany({
         where: {
@@ -177,17 +179,19 @@ export async function listAccessibleSteps({ currentUserId }: ListAccessibleSteps
                 ],
             },
         },
-        include: stepInclude,
+        select: stepPublicSelect,
         orderBy: [{ huntId: "asc" }, { orderIndex: "asc" }],
     });
 }
 
 export async function getStepById({ stepId, currentUserId }: GetStepInput) {
-    await assertReadableStep(stepId, currentUserId);
+    const baseStep = await assertReadableStep(stepId, currentUserId);
+
+    const isOwner = baseStep.hunt.createdById === currentUserId;
 
     const step = await prisma.step.findUnique({
         where: { id: stepId },
-        include: stepInclude,
+        select: isOwner ? stepOwnerDetailSelect : stepPublicSelect,
     });
 
     if (!step) {
@@ -219,7 +223,7 @@ export async function createStep({ huntId, currentUserId, data }: CreateStepInpu
                         },
                     },
                 },
-                include: stepInclude,
+                select: stepOwnerDetailSelect,
             });
         } catch (error) {
             if (
@@ -257,7 +261,7 @@ export async function updateStep({ stepId, currentUserId, data }: UpdateStepInpu
             return tx.step.update({
                 where: { id: stepId },
                 data: otherUpdates,
-                include: stepInclude,
+                select: stepOwnerDetailSelect,
             });
         }
 
@@ -317,7 +321,7 @@ export async function updateStep({ stepId, currentUserId, data }: UpdateStepInpu
                 ...otherUpdates,
                 orderIndex: targetOrderIndex,
             },
-            include: stepInclude,
+            select: stepOwnerDetailSelect,
         });
     });
 }
@@ -360,20 +364,30 @@ export async function deleteStep({ stepId, currentUserId }: DeleteStepInput) {
 }
 
 export async function listCluesForStep({ stepId, currentUserId }: ListStepCluesInput) {
-    const step = await assertReadableStep(stepId, currentUserId);
-
-    return prisma.clue.findMany({
-        where: { stepId: step.id },
-        include: {
-            step: {
+    const step = await prisma.step.findUnique({
+        where: { id: stepId },
+        select: {
+            id: true,
+            hunt: {
                 select: {
-                    id: true,
-                    title: true,
-                    orderIndex: true,
-                    huntId: true,
+                    createdById: true,
+                    isDeleted: true,
                 },
             },
         },
+    });
+
+    if (!step || step.hunt.isDeleted) {
+        throw new StepNotFoundError();
+    }
+
+    if (step.hunt.createdById !== currentUserId) {
+        throw new StepForbiddenError();
+    }
+
+    return prisma.clue.findMany({
+        where: { stepId },
+        select: clueOwnerDetailSelect,
         orderBy: {
             orderIndex: "asc",
         },

@@ -1,4 +1,4 @@
-import { huntInclude } from "@/lib/db/includes/hunt.include";
+import { huntOwnerDetailSelect } from "@/lib/db/includes/hunt.include";
 import { prisma } from "@/lib/db/prisma";
 import { HuntStatus, Prisma } from "@prisma/client";
 
@@ -51,7 +51,7 @@ export async function updateHunt({ huntId, currentUserId, data }: UpdateHuntInpu
     return prisma.hunt.update({
         where: { id: huntId },
         data,
-        include: huntInclude,
+        select: huntOwnerDetailSelect,
     });
 }
 
@@ -67,10 +67,6 @@ export async function deleteHunt({ huntId, currentUserId }: DeleteHuntInput) {
     if (existingHunt.createdById !== currentUserId) {
         throw new HuntForbiddenError();
     }
-
-    const softDeleteData: Prisma.HuntUpdateInput = {
-        isDeleted: true,
-    };
 
     await prisma.hunt.update({
         where: { id: huntId },

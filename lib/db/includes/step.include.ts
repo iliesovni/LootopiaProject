@@ -1,7 +1,16 @@
 import { Prisma } from "@prisma/client";
-import { clueInclude } from "./clue.include";
 
-export const stepInclude = {
+export const stepOwnerDetailSelect = {
+    id: true,
+    title: true,
+    description: true,
+    latitude: true,
+    longitude: true,
+    radiusMeters: true,
+    orderIndex: true,
+    pointsReward: true,
+    arMarkerType: true,
+    arAssetUrl: true,
     hunt: {
         select: {
             id: true,
@@ -13,9 +22,42 @@ export const stepInclude = {
         },
     },
     clues: {
-        include: clueInclude,
         orderBy: {
             orderIndex: "asc",
         },
+        select: {
+            id: true,
+            content: true,
+            penaltyPoints: true,
+            orderIndex: true,
+        },
     },
-} satisfies Prisma.StepInclude;
+    _count: {
+        select: {
+            clues: true,
+        },
+    },
+} satisfies Prisma.StepSelect;
+
+export const stepPublicSelect = {
+    id: true,
+    title: true,
+    description: true,
+    latitude: true,
+    longitude: true,
+    radiusMeters: true,
+    orderIndex: true,
+    pointsReward: true,
+    arMarkerType: true,
+    arAssetUrl: true,
+    hunt: {
+        select: {
+            id: true,
+        },
+    },
+    _count: {
+        select: {
+            clues: true,
+        },
+    },
+} satisfies Prisma.StepSelect;

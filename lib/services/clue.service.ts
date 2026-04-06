@@ -1,6 +1,6 @@
-import { clueInclude } from "@/lib/db/includes/clue.include";
+import { clueOwnerDetailSelect } from "@/lib/db/includes/clue.include";
 import { prisma } from "@/lib/db/prisma";
-import { HuntStatus, ParticipationStatus, Prisma } from "@prisma/client";
+import { HuntStatus, Prisma } from "@prisma/client";
 
 export class ClueNotFoundError extends Error {
     constructor() {
@@ -23,12 +23,6 @@ export class ClueNotEditableError extends Error {
 export class StepNotFoundError extends Error {
     constructor() {
         super("STEP_NOT_FOUND");
-    }
-}
-
-export class HuntNotFoundError extends Error {
-    constructor() {
-        super("HUNT_NOT_FOUND");
     }
 }
 
@@ -72,10 +66,6 @@ type GetClueInput = {
     currentUserId: string;
 };
 
-type ListAccessibleCluesInput = {
-    currentUserId: string;
-};
-
 async function assertEditableStep(
     tx: Prisma.TransactionClient,
     stepId: string,
@@ -113,19 +103,15 @@ async function assertEditableStep(
     return step;
 }
 
-async function assertReadableClue(clueId: string, currentUserId: string) {
+async function assertOwnerReadableClue(clueId: string, currentUserId: string) {
     const clue = await prisma.clue.findUnique({
         where: { id: clueId },
         select: {
             id: true,
-            stepId: true,
             step: {
                 select: {
-                    id: true,
-                    huntId: true,
                     hunt: {
                         select: {
-                            id: true,
                             createdById: true,
                             isDeleted: true,
                         },
@@ -139,70 +125,19 @@ async function assertReadableClue(clueId: string, currentUserId: string) {
         throw new ClueNotFoundError();
     }
 
-    const isOwner = clue.step.hunt.createdById === currentUserId;
-
-    if (isOwner) {
-        return clue;
-    }
-
-    const participation = await prisma.participation.findUnique({
-        where: {
-            userId_huntId: {
-                userId: currentUserId,
-                huntId: clue.step.huntId,
-            },
-        },
-        select: {
-            id: true,
-            status: true,
-        },
-    });
-
-    if (!participation) {
-        throw new ClueForbiddenError();
-    }
-
-    if (
-        participation.status !== ParticipationStatus.IN_PROGRESS &&
-        participation.status !== ParticipationStatus.ABANDONED &&
-        participation.status !== ParticipationStatus.COMPLETED
-    ) {
+    if (clue.step.hunt.createdById !== currentUserId) {
         throw new ClueForbiddenError();
     }
 
     return clue;
 }
 
-export async function listAccessibleClues({ currentUserId }: ListAccessibleCluesInput) {
-    return prisma.clue.findMany({
-        where: {
-            step: {
-                hunt: {
-                    isDeleted: false,
-                    OR: [
-                        { createdById: currentUserId },
-                        {
-                            participations: {
-                                some: {
-                                    userId: currentUserId,
-                                },
-                            },
-                        },
-                    ],
-                },
-            },
-        },
-        include: clueInclude,
-        orderBy: [{ stepId: "asc" }, { orderIndex: "asc" }],
-    });
-}
-
 export async function getClueById({ clueId, currentUserId }: GetClueInput) {
-    await assertReadableClue(clueId, currentUserId);
+    await assertOwnerReadableClue(clueId, currentUserId);
 
     const clue = await prisma.clue.findUnique({
         where: { id: clueId },
-        include: clueInclude,
+        select: clueOwnerDetailSelect,
     });
 
     if (!clue) {
@@ -253,7 +188,7 @@ export async function createClue({ currentUserId, data }: CreateClueInput) {
                 ...data,
                 orderIndex: finalOrderIndex,
             },
-            include: clueInclude,
+            select: clueOwnerDetailSelect,
         });
     });
 }
@@ -281,7 +216,7 @@ export async function updateClue({ clueId, currentUserId, data }: UpdateClueInpu
             return tx.clue.update({
                 where: { id: clueId },
                 data: otherUpdates,
-                include: clueInclude,
+                select: clueOwnerDetailSelect,
             });
         }
 
@@ -341,7 +276,7 @@ export async function updateClue({ clueId, currentUserId, data }: UpdateClueInpu
                 ...otherUpdates,
                 orderIndex: targetOrderIndex,
             },
-            include: clueInclude,
+            select: clueOwnerDetailSelect,
         });
     });
 }

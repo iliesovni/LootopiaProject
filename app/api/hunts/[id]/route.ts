@@ -1,6 +1,6 @@
 import { AuthError, getOptionalCurrentUser } from "@/lib/auth/current-user";
 import { requireAuth } from "@/lib/auth/guards";
-import { huntInclude } from "@/lib/db/includes/hunt.include";
+import { huntOwnerDetailSelect, huntPublicDetailSelect } from "@/lib/db/includes/hunt.include";
 import { prisma } from "@/lib/db/prisma";
 import {
     deleteHunt,
@@ -28,14 +28,17 @@ export async function GET(
         const { id } = await params;
         const currentUser = await getOptionalCurrentUser();
 
-        const hunt = await prisma.hunt.findUnique({
-            where: {
-                id,
+        const baseHunt = await prisma.hunt.findUnique({
+            where: { id },
+            select: {
+                id: true,
+                createdById: true,
+                status: true,
+                isDeleted: true,
             },
-            include: huntInclude,
         });
 
-        if (!hunt) {
+        if (!baseHunt) {
             return NextResponse.json(
                 {
                     message: "Chasse introuvable.",
@@ -45,7 +48,7 @@ export async function GET(
             );
         }
 
-        if (hunt.isDeleted) {
+        if (baseHunt.isDeleted) {
             return NextResponse.json(
                 {
                     message: "Chasse introuvable.",
@@ -55,9 +58,9 @@ export async function GET(
             );
         }
 
-        const isOwner = currentUser?.id === hunt.createdById;
+        const isOwner = currentUser?.id === baseHunt.createdById;
 
-        if (!isOwner && hunt.status !== HuntStatus.PUBLISHED) {
+        if (!isOwner && baseHunt.status !== HuntStatus.PUBLISHED) {
             return NextResponse.json(
                 {
                     message: "Chasse introuvable.",
@@ -66,6 +69,11 @@ export async function GET(
                 { status: 404 },
             );
         }
+
+        const hunt = await prisma.hunt.findUnique({
+            where: { id },
+            select: isOwner ? huntOwnerDetailSelect : huntPublicDetailSelect,
+        });
 
         return NextResponse.json({
             message: "Chasse trouvée.",

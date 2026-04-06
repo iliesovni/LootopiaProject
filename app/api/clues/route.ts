@@ -7,50 +7,11 @@ import {
     ClueNotEditableError,
     ClueOrderConflictError,
     createClue,
-    listAccessibleClues,
     StepNotFoundError,
 } from "@/lib/services/clue.service";
 import { createClueSchema } from "@/schemas/clue";
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-
-export async function GET() {
-    try {
-        const currentUser = await requireAuth();
-
-        const clues = await listAccessibleClues({
-            currentUserId: currentUser.id,
-        });
-
-        return NextResponse.json({
-            message: "Indices récupérés avec succès.",
-            data: {
-                count: clues.length,
-                items: clues,
-            },
-        });
-    } catch (error) {
-        console.error("GET /api/clues error:", error);
-
-        if (error instanceof AuthError) {
-            return NextResponse.json(
-                {
-                    message: error.message,
-                    error: error.code,
-                },
-                { status: error.status },
-            );
-        }
-
-        return NextResponse.json(
-            {
-                message: "Erreur lors de la récupération des indices.",
-                error: "INTERNAL_SERVER_ERROR",
-            },
-            { status: 500 },
-        );
-    }
-}
 
 export async function POST(request: NextRequest) {
     try {

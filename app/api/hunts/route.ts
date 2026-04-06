@@ -1,6 +1,6 @@
 import { AuthError } from "@/lib/auth/current-user";
 import { requireAuth } from "@/lib/auth/guards";
-import { huntInclude } from "@/lib/db/includes/hunt.include";
+import { huntCreatedSelect, huntPublicListSelect } from "@/lib/db/includes/hunt.include";
 import { prisma } from "@/lib/db/prisma";
 import { createHuntSchema } from "@/schemas/hunt";
 import { HuntMode, HuntStatus, HuntVisibility, Prisma, Role } from "@prisma/client";
@@ -15,7 +15,7 @@ export async function GET() {
                 visibility: HuntVisibility.PUBLIC,
                 isDeleted: false,
             },
-            include: huntInclude,
+            select: huntPublicListSelect,
             orderBy: {
                 createdAt: "desc",
             },
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
                 mode,
                 partnerId,
             },
-            include: huntInclude,
+            select: huntCreatedSelect,
         });
 
         return NextResponse.json(

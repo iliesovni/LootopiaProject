@@ -1,4 +1,7 @@
-import { participationInclude, participationProgressInclude } from "@/lib/db/includes/participation.include";
+import {
+    participationProgressInternalSelect,
+    participationPublicSelect,
+} from "@/lib/db/includes/participation.include";
 import { prisma } from "@/lib/db/prisma";
 import { HuntStatus, HuntVisibility, ParticipationStatus, Prisma, Role } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -11,6 +14,7 @@ export class ParticipationError extends Error {
 }
 
 type ClueLike = {
+    content: string;
     penaltyPoints: number;
     orderIndex: number;
 };
@@ -72,6 +76,43 @@ type UseClueInput = {
 type FinishParticipationInput = {
     participationId: string;
     userId: string;
+};
+
+type GetParticipationInput = {
+    participationId: string;
+    userId: string;
+};
+
+type ParticipationPublicStepProgress = {
+    stepId: string;
+    isCompleted: boolean;
+    cluesUsed: number;
+    pointsEarned: number;
+    completedAt: Date | null;
+    step: {
+        id: string;
+        title: string;
+        orderIndex: number;
+        pointsReward: number;
+    } | null;
+};
+
+type ParticipationPublicView = {
+    id: string;
+    status: ParticipationStatus;
+    totalScore: number;
+    startedAt: Date;
+    completedAt: Date | null;
+    huntId: string;
+    userId: string;
+    hunt: {
+        id: string;
+        title: string;
+        location: string | null;
+        difficulty: string | null;
+        bannerUrl: string | null;
+    } | null;
+    stepProgress: ParticipationPublicStepProgress[];
 };
 
 export function getTargetStepProgress(
@@ -207,21 +248,34 @@ async function createParticipationWithProgress(
         where: {
             id: participation.id,
         },
-        include: participationInclude,
+        select: participationPublicSelect,
     });
 
     if (!createdParticipation) {
         throw new ParticipationError("PARTICIPATION_NOT_FOUND");
     }
 
-    return createdParticipation;
+    return buildParticipationGameplayView(createdParticipation);
 }
 
-export async function startParticipation({
-                                             userId,
-                                             huntId,
-                                             accessCode,
-                                         }: StartParticipationInput) {
+export async function getParticipationById({ participationId, userId }: GetParticipationInput) {
+    const participation = await prisma.participation.findUnique({
+        where: { id: participationId },
+        select: participationPublicSelect,
+    });
+
+    if (!participation) {
+        throw new ParticipationError("PARTICIPATION_NOT_FOUND");
+    }
+
+    if (participation.userId !== userId) {
+        throw new ParticipationError("PARTICIPATION_FORBIDDEN");
+    }
+
+    return buildParticipationGameplayView(participation);
+}
+
+export async function startParticipation({ userId, huntId, accessCode }: StartParticipationInput) {
     try {
         return await prisma.$transaction(async (tx) => {
             const hunt = await validateStartParticipation(
@@ -238,18 +292,20 @@ export async function startParticipation({
                         huntId,
                     },
                 },
-                include: participationInclude,
+                select: participationPublicSelect,
             });
 
             if (existingParticipation) {
                 if (existingParticipation.status === ParticipationStatus.ABANDONED) {
-                    return tx.participation.update({
+                    const resumedParticipation = await tx.participation.update({
                         where: { id: existingParticipation.id },
                         data: {
                             status: ParticipationStatus.IN_PROGRESS,
                         },
-                        include: participationInclude,
+                        select: participationPublicSelect,
                     });
+
+                    return buildParticipationGameplayView(resumedParticipation);
                 }
 
                 throw new ParticipationError("PARTICIPATION_ALREADY_EXISTS");
@@ -284,7 +340,7 @@ export async function startParticipation({
 export async function completeStep({ participationId, userId, stepId }: CompleteStepInput) {
     const participation = await prisma.participation.findUnique({
         where: { id: participationId },
-        include: participationProgressInclude,
+        select: participationProgressInternalSelect,
     });
 
     if (!participation) {
@@ -349,14 +405,10 @@ export async function completeStep({ participationId, userId, stepId }: Complete
     };
 }
 
-export async function useClue({
-                                  participationId,
-                                  userId,
-                                  stepId,
-                              }: UseClueInput) {
+export async function useClue({ participationId, userId, stepId }: UseClueInput) {
     const participation = await prisma.participation.findUnique({
         where: { id: participationId },
-        include: participationProgressInclude,
+        select: participationProgressInternalSelect,
     });
 
     if (!participation) {
@@ -394,19 +446,18 @@ export async function useClue({
     });
 
     return {
-        clue: nextClue,
+        clue: {
+            content: nextClue.content,
+        },
         cluesUsed: updatedProgress.cluesUsed,
         remainingClues: clues.length - updatedProgress.cluesUsed,
     };
 }
 
-export async function finishParticipation({
-                                              participationId,
-                                              userId,
-                                          }: FinishParticipationInput) {
+export async function finishParticipation({ participationId, userId }: FinishParticipationInput) {
     const participation = await prisma.participation.findUnique({
         where: { id: participationId },
-        include: participationInclude,
+        select: participationPublicSelect,
     });
 
     if (!participation) {
@@ -429,14 +480,40 @@ export async function finishParticipation({
         throw new ParticipationError("PARTICIPATION_HAS_REMAINING_STEPS");
     }
 
-    return prisma.participation.update({
+    const updatedParticipation = await prisma.participation.update({
         where: { id: participationId },
         data: {
             status: ParticipationStatus.COMPLETED,
             completedAt: new Date(),
         },
-        include: participationInclude,
+        select: participationPublicSelect,
     });
+
+    return buildParticipationGameplayView(updatedParticipation);
+}
+
+function buildParticipationGameplayView(participation: ParticipationPublicView) {
+    const completedSteps = participation.stepProgress.filter(
+        (progress) => progress.isCompleted,
+    );
+
+    const currentStep =
+        participation.status === ParticipationStatus.IN_PROGRESS
+            ? participation.stepProgress.find((progress) => !progress.isCompleted) ?? null
+            : null;
+
+    return {
+        id: participation.id,
+        status: participation.status,
+        totalScore: participation.totalScore,
+        startedAt: participation.startedAt,
+        completedAt: participation.completedAt,
+        huntId: participation.huntId,
+        userId: participation.userId,
+        hunt: participation.hunt,
+        currentStep,
+        completedSteps,
+    };
 }
 
 export function mapParticipationError(error: unknown) {
