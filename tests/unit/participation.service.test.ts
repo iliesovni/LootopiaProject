@@ -22,6 +22,84 @@ jest.mock("@/lib/db/prisma", () => ({
     },
 }));
 
+beforeEach(() => {
+    jest.clearAllMocks();
+});
+
+function getMockedPrisma() {
+    return prisma as jest.Mocked<typeof prisma>;
+}
+
+function getParticipationFindUniqueMock() {
+    return getMockedPrisma().participation.findUnique as jest.Mock;
+}
+
+function getParticipationUpdateMock() {
+    return getMockedPrisma().participation.update as jest.Mock;
+}
+
+function getStepProgressUpdateMock() {
+    return getMockedPrisma().stepProgress.update as jest.Mock;
+}
+
+function getTransactionMock() {
+    return getMockedPrisma().$transaction as jest.Mock;
+}
+
+function makeClue(overrides = {}) {
+    return {
+        content: "Indice",
+        penaltyPoints: 10,
+        orderIndex: 0,
+        ...overrides,
+    };
+}
+
+function makeStepProgress(overrides = {}) {
+    return {
+        stepId: "step-1",
+        isCompleted: false,
+        cluesUsed: 0,
+        pointsEarned: 0,
+        completedAt: null,
+        step: {
+            id: "step-1",
+            title: "Step 1",
+            orderIndex: 0,
+            pointsReward: 100,
+            clues: [],
+        },
+        ...overrides,
+    };
+}
+
+function makeParticipation(overrides = {}) {
+    return {
+        id: "participation-1",
+        userId: "user-1",
+        status: ParticipationStatus.IN_PROGRESS,
+        totalScore: 0,
+        startedAt: new Date("2026-01-01T10:00:00.000Z"),
+        completedAt: null,
+        huntId: "hunt-1",
+        hunt: {
+            id: "hunt-1",
+            title: "Test Hunt",
+            location: "Paris",
+            difficulty: "EASY",
+            bannerUrl: null,
+        },
+        stepProgress: [],
+        ...overrides,
+    };
+}
+
+function mockTransaction(tx: unknown) {
+    getTransactionMock().mockImplementation(async (callback: (tx: unknown) => unknown) => {
+        return callback(tx);
+    });
+}
+
 describe("participation.service - startParticipation", () => {
     it("should throw if a participation already exists for the same user and hunt", async () => {
         // Arrange
@@ -43,34 +121,20 @@ describe("participation.service - startParticipation", () => {
                 }),
             },
             participation: {
-                findUnique: jest.fn().mockResolvedValue({
-                    id: "participation-1",
-                    status: ParticipationStatus.IN_PROGRESS,
-                    totalScore: 0,
-                    startedAt: new Date(),
-                    completedAt: null,
-                    huntId: "hunt-1",
-                    userId: "user-1",
-                    hunt: {
-                        id: "hunt-1",
-                        title: "Test Hunt",
-                        location: "Paris",
-                        difficulty: "EASY",
-                        bannerUrl: null,
-                    },
-                    stepProgress: [],
-                }),
+                findUnique: jest.fn().mockResolvedValue(
+                    makeParticipation({
+                        status: ParticipationStatus.IN_PROGRESS,
+                        huntId: "hunt-1",
+                        userId: "user-1",
+                    }),
+                ),
             },
             huntAccessAttempt: {
                 findUnique: jest.fn().mockResolvedValue(null),
             },
         };
 
-        const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
-
-        mockedPrisma.$transaction.mockImplementation(async (callback) => {
-            return callback(tx as never);
-        });
+        mockTransaction(tx);
 
         // Act + Assert
         await expect(
@@ -85,10 +149,9 @@ describe("participation.service - startParticipation", () => {
 describe("participation.service - getTargetStepProgress", () => {
     it("should throw if the requested step is out of order", () => {
         // Arrange
-        const participation = {
-            status: ParticipationStatus.IN_PROGRESS,
+        const participation = makeParticipation({
             stepProgress: [
-                {
+                makeStepProgress({
                     stepId: "step-1",
                     isCompleted: false,
                     cluesUsed: 0,
@@ -96,8 +159,8 @@ describe("participation.service - getTargetStepProgress", () => {
                         pointsReward: 100,
                         clues: [],
                     },
-                },
-                {
+                }),
+                makeStepProgress({
                     stepId: "step-2",
                     isCompleted: false,
                     cluesUsed: 0,
@@ -105,9 +168,9 @@ describe("participation.service - getTargetStepProgress", () => {
                         pointsReward: 80,
                         clues: [],
                     },
-                },
+                }),
             ],
-        };
+        });
 
         // Act + Assert
         expect(() =>
@@ -117,20 +180,10 @@ describe("participation.service - getTargetStepProgress", () => {
 
     it("should throw if participation is not in progress", () => {
         // Arrange
-        const participation = {
+        const participation = makeParticipation({
             status: ParticipationStatus.COMPLETED,
-            stepProgress: [
-                {
-                    stepId: "step-1",
-                    isCompleted: false,
-                    cluesUsed: 0,
-                    step: {
-                        pointsReward: 100,
-                        clues: [],
-                    },
-                },
-            ],
-        };
+            stepProgress: [makeStepProgress()],
+        });
 
         // Act + Assert
         expect(() =>
@@ -140,20 +193,9 @@ describe("participation.service - getTargetStepProgress", () => {
 
     it("should throw if the requested step is not part of the participation", () => {
         // Arrange
-        const participation = {
-            status: ParticipationStatus.IN_PROGRESS,
-            stepProgress: [
-                {
-                    stepId: "step-1",
-                    isCompleted: false,
-                    cluesUsed: 0,
-                    step: {
-                        pointsReward: 100,
-                        clues: [],
-                    },
-                },
-            ],
-        };
+        const participation = makeParticipation({
+            stepProgress: [makeStepProgress()],
+        });
 
         // Act + Assert
         expect(() =>
@@ -163,29 +205,22 @@ describe("participation.service - getTargetStepProgress", () => {
 
     it("should throw if the requested step is already completed", () => {
         // Arrange
-        const participation = {
-            status: ParticipationStatus.IN_PROGRESS,
+        const participation = makeParticipation({
             stepProgress: [
-                {
+                makeStepProgress({
                     stepId: "step-1",
                     isCompleted: true,
-                    cluesUsed: 0,
-                    step: {
-                        pointsReward: 100,
-                        clues: [],
-                    },
-                },
-                {
+                }),
+                makeStepProgress({
                     stepId: "step-2",
                     isCompleted: false,
-                    cluesUsed: 0,
                     step: {
                         pointsReward: 80,
                         clues: [],
                     },
-                },
+                }),
             ],
-        };
+        });
 
         // Act + Assert
         expect(() =>
@@ -195,17 +230,14 @@ describe("participation.service - getTargetStepProgress", () => {
 
     it("should throw if the requested step is misconfigured", () => {
         // Arrange
-        const participation = {
-            status: ParticipationStatus.IN_PROGRESS,
+        const participation = makeParticipation({
             stepProgress: [
-                {
+                makeStepProgress({
                     stepId: "step-1",
-                    isCompleted: false,
-                    cluesUsed: 0,
                     step: null,
-                },
+                }),
             ],
-        };
+        });
 
         // Act + Assert
         expect(() =>
@@ -215,31 +247,22 @@ describe("participation.service - getTargetStepProgress", () => {
 
     it("should return the requested step progress when it is the next expected step", () => {
         // Arrange
-        const targetStepProgress = {
+        const targetStepProgress = makeStepProgress({
             stepId: "step-1",
-            isCompleted: false,
-            cluesUsed: 0,
-            step: {
-                pointsReward: 100,
-                clues: [],
-            },
-        };
+        });
 
-        const participation = {
-            status: ParticipationStatus.IN_PROGRESS,
+        const participation = makeParticipation({
             stepProgress: [
                 targetStepProgress,
-                {
+                makeStepProgress({
                     stepId: "step-2",
-                    isCompleted: false,
-                    cluesUsed: 0,
                     step: {
                         pointsReward: 80,
                         clues: [],
                     },
-                },
+                }),
             ],
-        };
+        });
 
         // Act
         const result = getTargetStepProgress(participation, "step-1");
@@ -252,40 +275,24 @@ describe("participation.service - getTargetStepProgress", () => {
 describe("participation.service - useClue", () => {
     it("should return the next clue and increment cluesUsed", async () => {
         // Arrange
-        const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
+        getParticipationFindUniqueMock().mockResolvedValue(
+            makeParticipation({
+                stepProgress: [
+                    makeStepProgress({
+                        cluesUsed: 0,
+                        step: {
+                            pointsReward: 100,
+                            clues: [
+                                makeClue({ content: "Premier indice", orderIndex: 0 }),
+                                makeClue({ content: "Deuxième indice", orderIndex: 1 }),
+                            ],
+                        },
+                    }),
+                ],
+            }),
+        );
 
-        const participationFindUniqueMock = mockedPrisma.participation.findUnique as jest.Mock;
-        const stepProgressUpdateMock = mockedPrisma.stepProgress.update as jest.Mock;
-
-        participationFindUniqueMock.mockResolvedValue({
-            id: "participation-1",
-            userId: "user-1",
-            status: ParticipationStatus.IN_PROGRESS,
-            stepProgress: [
-                {
-                    stepId: "step-1",
-                    isCompleted: false,
-                    cluesUsed: 0,
-                    step: {
-                        pointsReward: 100,
-                        clues: [
-                            {
-                                content: "Premier indice",
-                                penaltyPoints: 10,
-                                orderIndex: 0,
-                            },
-                            {
-                                content: "Deuxième indice",
-                                penaltyPoints: 20,
-                                orderIndex: 1,
-                            },
-                        ],
-                    },
-                },
-            ],
-        });
-
-        stepProgressUpdateMock.mockResolvedValue({
+        getStepProgressUpdateMock().mockResolvedValue({
             cluesUsed: 1,
         });
 
@@ -305,12 +312,12 @@ describe("participation.service - useClue", () => {
             remainingClues: 1,
         });
 
-        expect(participationFindUniqueMock).toHaveBeenCalledWith({
+        expect(getParticipationFindUniqueMock()).toHaveBeenCalledWith({
             where: { id: "participation-1" },
             select: expect.anything(),
         });
 
-        expect(stepProgressUpdateMock).toHaveBeenCalledWith({
+        expect(getStepProgressUpdateMock()).toHaveBeenCalledWith({
             where: {
                 participationId_stepId: {
                     participationId: "participation-1",
@@ -330,12 +337,7 @@ describe("participation.service - useClue", () => {
 
     it("should throw if participation is not found", async () => {
         // Arrange
-        const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
-
-        const participationFindUniqueMock =
-            mockedPrisma.participation.findUnique as jest.Mock;
-
-        participationFindUniqueMock.mockResolvedValue(null);
+        getParticipationFindUniqueMock().mockResolvedValue(null);
 
         // Act + Assert
         await expect(
@@ -349,33 +351,19 @@ describe("participation.service - useClue", () => {
 
     it("should throw if participation does not belong to the user", async () => {
         // Arrange
-        const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
-
-        const participationFindUniqueMock =
-            mockedPrisma.participation.findUnique as jest.Mock;
-
-        participationFindUniqueMock.mockResolvedValue({
-            id: "participation-1",
-            userId: "other-user",
-            status: ParticipationStatus.IN_PROGRESS,
-            stepProgress: [
-                {
-                    stepId: "step-1",
-                    isCompleted: false,
-                    cluesUsed: 0,
-                    step: {
-                        pointsReward: 100,
-                        clues: [
-                            {
-                                content: "Premier indice",
-                                penaltyPoints: 10,
-                                orderIndex: 0,
-                            },
-                        ],
-                    },
-                },
-            ],
-        });
+        getParticipationFindUniqueMock().mockResolvedValue(
+            makeParticipation({
+                userId: "other-user",
+                stepProgress: [
+                    makeStepProgress({
+                        step: {
+                            pointsReward: 100,
+                            clues: [makeClue()],
+                        },
+                    }),
+                ],
+            }),
+        );
 
         // Act + Assert
         await expect(
@@ -389,38 +377,22 @@ describe("participation.service - useClue", () => {
 
     it("should throw if there are no more clues available", async () => {
         // Arrange
-        const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
-
-        const participationFindUniqueMock =
-            mockedPrisma.participation.findUnique as jest.Mock;
-
-        participationFindUniqueMock.mockResolvedValue({
-            id: "participation-1",
-            userId: "user-1",
-            status: ParticipationStatus.IN_PROGRESS,
-            stepProgress: [
-                {
-                    stepId: "step-1",
-                    isCompleted: false,
-                    cluesUsed: 2,
-                    step: {
-                        pointsReward: 100,
-                        clues: [
-                            {
-                                content: "Premier indice",
-                                penaltyPoints: 10,
-                                orderIndex: 0,
-                            },
-                            {
-                                content: "Deuxième indice",
-                                penaltyPoints: 20,
-                                orderIndex: 1,
-                            },
-                        ],
-                    },
-                },
-            ],
-        });
+        getParticipationFindUniqueMock().mockResolvedValue(
+            makeParticipation({
+                stepProgress: [
+                    makeStepProgress({
+                        cluesUsed: 2,
+                        step: {
+                            pointsReward: 100,
+                            clues: [
+                                makeClue({ orderIndex: 0 }),
+                                makeClue({ orderIndex: 1 }),
+                            ],
+                        },
+                    }),
+                ],
+            }),
+        );
 
         // Act + Assert
         await expect(
@@ -436,36 +408,22 @@ describe("participation.service - useClue", () => {
 describe("participation.service - completeStep", () => {
     it("should complete the step and add full points when no clue was used", async () => {
         // Arrange
-        const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
-
-        const participationFindUniqueMock =
-            mockedPrisma.participation.findUnique as jest.Mock;
-
-        const transactionMock =
-            mockedPrisma.$transaction as jest.Mock;
-
-        participationFindUniqueMock.mockResolvedValue({
-            id: "participation-1",
-            userId: "user-1",
-            status: ParticipationStatus.IN_PROGRESS,
-            stepProgress: [
-                {
-                    stepId: "step-1",
-                    isCompleted: false,
-                    cluesUsed: 0,
-                    step: {
-                        pointsReward: 100,
-                        clues: [
-                            {
-                                content: "Premier indice",
-                                penaltyPoints: 10,
-                                orderIndex: 0,
-                            },
-                        ],
-                    },
-                },
-            ],
-        });
+        getParticipationFindUniqueMock().mockResolvedValue(
+            makeParticipation({
+                stepProgress: [
+                    makeStepProgress({
+                        cluesUsed: 0,
+                        step: {
+                            id: "step-1",
+                            title: "Step 1",
+                            orderIndex: 0,
+                            pointsReward: 100,
+                            clues: [makeClue()],
+                        },
+                    }),
+                ],
+            }),
+        );
 
         const tx = {
             stepProgress: {
@@ -479,9 +437,7 @@ describe("participation.service - completeStep", () => {
             },
         };
 
-        transactionMock.mockImplementation(async (callback) => {
-            return callback(tx);
-        });
+        mockTransaction(tx);
 
         // Act
         const result = await completeStep({
@@ -496,11 +452,6 @@ describe("participation.service - completeStep", () => {
             stepId: "step-1",
             pointsEarned: 100,
             totalScore: 100,
-        });
-
-        expect(participationFindUniqueMock).toHaveBeenCalledWith({
-            where: { id: "participation-1" },
-            select: expect.anything(),
         });
 
         expect(tx.stepProgress.update).toHaveBeenCalledWith({
@@ -533,46 +484,26 @@ describe("participation.service - completeStep", () => {
 
     it("should apply clue penalties when completing a step", async () => {
         // Arrange
-        const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
-
-        const participationFindUniqueMock =
-            mockedPrisma.participation.findUnique as jest.Mock;
-
-        const transactionMock =
-            mockedPrisma.$transaction as jest.Mock;
-
-        participationFindUniqueMock.mockResolvedValue({
-            id: "participation-1",
-            userId: "user-1",
-            status: ParticipationStatus.IN_PROGRESS,
-            stepProgress: [
-                {
-                    stepId: "step-1",
-                    isCompleted: false,
-                    cluesUsed: 2,
-                    step: {
-                        pointsReward: 100,
-                        clues: [
-                            {
-                                content: "Premier indice",
-                                penaltyPoints: 10,
-                                orderIndex: 0,
-                            },
-                            {
-                                content: "Deuxième indice",
-                                penaltyPoints: 20,
-                                orderIndex: 1,
-                            },
-                            {
-                                content: "Troisième indice",
-                                penaltyPoints: 30,
-                                orderIndex: 2,
-                            },
-                        ],
-                    },
-                },
-            ],
-        });
+        getParticipationFindUniqueMock().mockResolvedValue(
+            makeParticipation({
+                stepProgress: [
+                    makeStepProgress({
+                        cluesUsed: 2,
+                        step: {
+                            id: "step-1",
+                            title: "Step 1",
+                            orderIndex: 0,
+                            pointsReward: 100,
+                            clues: [
+                                makeClue({ penaltyPoints: 10, orderIndex: 0 }),
+                                makeClue({ penaltyPoints: 20, orderIndex: 1 }),
+                                makeClue({ penaltyPoints: 30, orderIndex: 2 }),
+                            ],
+                        },
+                    }),
+                ],
+            }),
+        );
 
         const tx = {
             stepProgress: {
@@ -586,9 +517,7 @@ describe("participation.service - completeStep", () => {
             },
         };
 
-        transactionMock.mockImplementation(async (callback) => {
-            return callback(tx);
-        });
+        mockTransaction(tx);
 
         // Act
         const result = await completeStep({
@@ -635,41 +564,25 @@ describe("participation.service - completeStep", () => {
 
     it("should clamp earned points to zero when penalties exceed reward", async () => {
         // Arrange
-        const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
-
-        const participationFindUniqueMock =
-            mockedPrisma.participation.findUnique as jest.Mock;
-
-        const transactionMock =
-            mockedPrisma.$transaction as jest.Mock;
-
-        participationFindUniqueMock.mockResolvedValue({
-            id: "participation-1",
-            userId: "user-1",
-            status: ParticipationStatus.IN_PROGRESS,
-            stepProgress: [
-                {
-                    stepId: "step-1",
-                    isCompleted: false,
-                    cluesUsed: 2,
-                    step: {
-                        pointsReward: 15,
-                        clues: [
-                            {
-                                content: "Premier indice",
-                                penaltyPoints: 10,
-                                orderIndex: 0,
-                            },
-                            {
-                                content: "Deuxième indice",
-                                penaltyPoints: 20,
-                                orderIndex: 1,
-                            },
-                        ],
-                    },
-                },
-            ],
-        });
+        getParticipationFindUniqueMock().mockResolvedValue(
+            makeParticipation({
+                stepProgress: [
+                    makeStepProgress({
+                        cluesUsed: 2,
+                        step: {
+                            id: "step-1",
+                            title: "Step 1",
+                            orderIndex: 0,
+                            pointsReward: 15,
+                            clues: [
+                                makeClue({ penaltyPoints: 10, orderIndex: 0 }),
+                                makeClue({ penaltyPoints: 20, orderIndex: 1 }),
+                            ],
+                        },
+                    }),
+                ],
+            }),
+        );
 
         const tx = {
             stepProgress: {
@@ -683,9 +596,7 @@ describe("participation.service - completeStep", () => {
             },
         };
 
-        transactionMock.mockImplementation(async (callback) => {
-            return callback(tx);
-        });
+        mockTransaction(tx);
 
         // Act
         const result = await completeStep({
@@ -732,12 +643,7 @@ describe("participation.service - completeStep", () => {
 
     it("should throw if participation is not found", async () => {
         // Arrange
-        const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
-
-        const participationFindUniqueMock =
-            mockedPrisma.participation.findUnique as jest.Mock;
-
-        participationFindUniqueMock.mockResolvedValue(null);
+        getParticipationFindUniqueMock().mockResolvedValue(null);
 
         // Act + Assert
         await expect(
@@ -751,27 +657,12 @@ describe("participation.service - completeStep", () => {
 
     it("should throw if participation does not belong to the user", async () => {
         // Arrange
-        const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
-
-        const participationFindUniqueMock =
-            mockedPrisma.participation.findUnique as jest.Mock;
-
-        participationFindUniqueMock.mockResolvedValue({
-            id: "participation-1",
-            userId: "other-user",
-            status: ParticipationStatus.IN_PROGRESS,
-            stepProgress: [
-                {
-                    stepId: "step-1",
-                    isCompleted: false,
-                    cluesUsed: 0,
-                    step: {
-                        pointsReward: 100,
-                        clues: [],
-                    },
-                },
-            ],
-        });
+        getParticipationFindUniqueMock().mockResolvedValue(
+            makeParticipation({
+                userId: "other-user",
+                stepProgress: [makeStepProgress()],
+            }),
+        );
 
         // Act + Assert
         await expect(
@@ -785,36 +676,27 @@ describe("participation.service - completeStep", () => {
 
     it("should propagate step validation errors from getTargetStepProgress", async () => {
         // Arrange
-        const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
-
-        const participationFindUniqueMock =
-            mockedPrisma.participation.findUnique as jest.Mock;
-
-        participationFindUniqueMock.mockResolvedValue({
-            id: "participation-1",
-            userId: "user-1",
-            status: ParticipationStatus.IN_PROGRESS,
-            stepProgress: [
-                {
-                    stepId: "step-1",
-                    isCompleted: false,
-                    cluesUsed: 0,
-                    step: {
-                        pointsReward: 100,
-                        clues: [],
-                    },
-                },
-                {
-                    stepId: "step-2",
-                    isCompleted: false,
-                    cluesUsed: 0,
-                    step: {
-                        pointsReward: 80,
-                        clues: [],
-                    },
-                },
-            ],
-        });
+        getParticipationFindUniqueMock().mockResolvedValue(
+            makeParticipation({
+                stepProgress: [
+                    makeStepProgress({
+                        stepId: "step-1",
+                        isCompleted: false,
+                    }),
+                    makeStepProgress({
+                        stepId: "step-2",
+                        isCompleted: false,
+                        step: {
+                            id: "step-2",
+                            title: "Step 2",
+                            orderIndex: 1,
+                            pointsReward: 80,
+                            clues: [],
+                        },
+                    }),
+                ],
+            }),
+        );
 
         // Act + Assert
         await expect(
@@ -830,105 +712,67 @@ describe("participation.service - completeStep", () => {
 describe("participation.service - finishParticipation", () => {
     it("should mark participation as completed when all steps are finished", async () => {
         // Arrange
-        const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
-
-        const participationFindUniqueMock =
-            mockedPrisma.participation.findUnique as jest.Mock;
-
-        const participationUpdateMock =
-            mockedPrisma.participation.update as jest.Mock;
-
-        participationFindUniqueMock.mockResolvedValue({
-            id: "participation-1",
-            userId: "user-1",
-            status: ParticipationStatus.IN_PROGRESS,
-            totalScore: 150,
-            startedAt: new Date("2026-01-01T10:00:00.000Z"),
-            completedAt: null,
-            huntId: "hunt-1",
-            hunt: {
-                id: "hunt-1",
-                title: "Test Hunt",
-                location: "Paris",
-                difficulty: "EASY",
-                bannerUrl: null,
-            },
-            stepProgress: [
-                {
-                    stepId: "step-1",
-                    isCompleted: true,
-                    cluesUsed: 1,
-                    pointsEarned: 90,
-                    completedAt: new Date("2026-01-01T10:10:00.000Z"),
-                    step: {
-                        id: "step-1",
-                        title: "Step 1",
-                        orderIndex: 0,
-                        pointsReward: 100,
-                    },
-                },
-                {
-                    stepId: "step-2",
-                    isCompleted: true,
-                    cluesUsed: 0,
-                    pointsEarned: 60,
-                    completedAt: new Date("2026-01-01T10:20:00.000Z"),
-                    step: {
-                        id: "step-2",
-                        title: "Step 2",
-                        orderIndex: 1,
-                        pointsReward: 60,
-                    },
-                },
-            ],
-        });
-
         const completedAt = new Date("2026-01-01T10:30:00.000Z");
 
-        participationUpdateMock.mockResolvedValue({
-            id: "participation-1",
-            userId: "user-1",
-            status: ParticipationStatus.COMPLETED,
-            totalScore: 150,
-            startedAt: new Date("2026-01-01T10:00:00.000Z"),
-            completedAt,
-            huntId: "hunt-1",
-            hunt: {
-                id: "hunt-1",
-                title: "Test Hunt",
-                location: "Paris",
-                difficulty: "EASY",
-                bannerUrl: null,
-            },
-            stepProgress: [
-                {
-                    stepId: "step-1",
-                    isCompleted: true,
-                    cluesUsed: 1,
-                    pointsEarned: 90,
-                    completedAt: new Date("2026-01-01T10:10:00.000Z"),
-                    step: {
-                        id: "step-1",
-                        title: "Step 1",
-                        orderIndex: 0,
-                        pointsReward: 100,
-                    },
-                },
-                {
-                    stepId: "step-2",
-                    isCompleted: true,
-                    cluesUsed: 0,
-                    pointsEarned: 60,
-                    completedAt: new Date("2026-01-01T10:20:00.000Z"),
-                    step: {
-                        id: "step-2",
-                        title: "Step 2",
-                        orderIndex: 1,
-                        pointsReward: 60,
-                    },
-                },
-            ],
-        });
+        getParticipationFindUniqueMock().mockResolvedValue(
+            makeParticipation({
+                totalScore: 150,
+                stepProgress: [
+                    makeStepProgress({
+                        stepId: "step-1",
+                        isCompleted: true,
+                        cluesUsed: 1,
+                        pointsEarned: 90,
+                        completedAt: new Date("2026-01-01T10:10:00.000Z"),
+                    }),
+                    makeStepProgress({
+                        stepId: "step-2",
+                        isCompleted: true,
+                        cluesUsed: 0,
+                        pointsEarned: 60,
+                        completedAt: new Date("2026-01-01T10:20:00.000Z"),
+                        step: {
+                            id: "step-2",
+                            title: "Step 2",
+                            orderIndex: 1,
+                            pointsReward: 60,
+                            clues: [],
+                        },
+                    }),
+                ],
+            }),
+        );
+
+        getParticipationUpdateMock().mockResolvedValue(
+            makeParticipation({
+                status: ParticipationStatus.COMPLETED,
+                totalScore: 150,
+                completedAt,
+                stepProgress: [
+                    makeStepProgress({
+                        stepId: "step-1",
+                        isCompleted: true,
+                        cluesUsed: 1,
+                        pointsEarned: 90,
+                        completedAt: new Date("2026-01-01T10:10:00.000Z"),
+                    }),
+                    makeStepProgress({
+                        stepId: "step-2",
+                        isCompleted: true,
+                        cluesUsed: 0,
+                        pointsEarned: 60,
+                        completedAt: new Date("2026-01-01T10:20:00.000Z"),
+                        step: {
+                            id: "step-2",
+                            title: "Step 2",
+                            orderIndex: 1,
+                            pointsReward: 60,
+                            clues: [],
+                        },
+                    }),
+                ],
+            }),
+        );
 
         // Act
         const result = await finishParticipation({
@@ -937,12 +781,12 @@ describe("participation.service - finishParticipation", () => {
         });
 
         // Assert
-        expect(participationFindUniqueMock).toHaveBeenCalledWith({
+        expect(getParticipationFindUniqueMock()).toHaveBeenCalledWith({
             where: { id: "participation-1" },
             select: expect.anything(),
         });
 
-        expect(participationUpdateMock).toHaveBeenCalledWith({
+        expect(getParticipationUpdateMock()).toHaveBeenCalledWith({
             where: { id: "participation-1" },
             data: {
                 status: ParticipationStatus.COMPLETED,
@@ -967,12 +811,7 @@ describe("participation.service - finishParticipation", () => {
 
     it("should throw if participation is not found", async () => {
         // Arrange
-        const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
-
-        const participationFindUniqueMock =
-            mockedPrisma.participation.findUnique as jest.Mock;
-
-        participationFindUniqueMock.mockResolvedValue(null);
+        getParticipationFindUniqueMock().mockResolvedValue(null);
 
         // Act + Assert
         await expect(
@@ -985,28 +824,11 @@ describe("participation.service - finishParticipation", () => {
 
     it("should throw if participation does not belong to the user", async () => {
         // Arrange
-        const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
-
-        const participationFindUniqueMock =
-            mockedPrisma.participation.findUnique as jest.Mock;
-
-        participationFindUniqueMock.mockResolvedValue({
-            id: "participation-1",
-            userId: "other-user",
-            status: ParticipationStatus.IN_PROGRESS,
-            totalScore: 150,
-            startedAt: new Date("2026-01-01T10:00:00.000Z"),
-            completedAt: null,
-            huntId: "hunt-1",
-            hunt: {
-                id: "hunt-1",
-                title: "Test Hunt",
-                location: "Paris",
-                difficulty: "EASY",
-                bannerUrl: null,
-            },
-            stepProgress: [],
-        });
+        getParticipationFindUniqueMock().mockResolvedValue(
+            makeParticipation({
+                userId: "other-user",
+            }),
+        );
 
         // Act + Assert
         await expect(
@@ -1019,28 +841,12 @@ describe("participation.service - finishParticipation", () => {
 
     it("should throw if participation is not in progress", async () => {
         // Arrange
-        const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
-
-        const participationFindUniqueMock =
-            mockedPrisma.participation.findUnique as jest.Mock;
-
-        participationFindUniqueMock.mockResolvedValue({
-            id: "participation-1",
-            userId: "user-1",
-            status: ParticipationStatus.COMPLETED,
-            totalScore: 150,
-            startedAt: new Date("2026-01-01T10:00:00.000Z"),
-            completedAt: new Date("2026-01-01T10:30:00.000Z"),
-            huntId: "hunt-1",
-            hunt: {
-                id: "hunt-1",
-                title: "Test Hunt",
-                location: "Paris",
-                difficulty: "EASY",
-                bannerUrl: null,
-            },
-            stepProgress: [],
-        });
+        getParticipationFindUniqueMock().mockResolvedValue(
+            makeParticipation({
+                status: ParticipationStatus.COMPLETED,
+                completedAt: new Date("2026-01-01T10:30:00.000Z"),
+            }),
+        );
 
         // Act + Assert
         await expect(
@@ -1053,55 +859,34 @@ describe("participation.service - finishParticipation", () => {
 
     it("should throw if participation still has remaining steps", async () => {
         // Arrange
-        const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
-
-        const participationFindUniqueMock =
-            mockedPrisma.participation.findUnique as jest.Mock;
-
-        participationFindUniqueMock.mockResolvedValue({
-            id: "participation-1",
-            userId: "user-1",
-            status: ParticipationStatus.IN_PROGRESS,
-            totalScore: 90,
-            startedAt: new Date("2026-01-01T10:00:00.000Z"),
-            completedAt: null,
-            huntId: "hunt-1",
-            hunt: {
-                id: "hunt-1",
-                title: "Test Hunt",
-                location: "Paris",
-                difficulty: "EASY",
-                bannerUrl: null,
-            },
-            stepProgress: [
-                {
-                    stepId: "step-1",
-                    isCompleted: true,
-                    cluesUsed: 1,
-                    pointsEarned: 90,
-                    completedAt: new Date("2026-01-01T10:10:00.000Z"),
-                    step: {
-                        id: "step-1",
-                        title: "Step 1",
-                        orderIndex: 0,
-                        pointsReward: 100,
-                    },
-                },
-                {
-                    stepId: "step-2",
-                    isCompleted: false,
-                    cluesUsed: 0,
-                    pointsEarned: 0,
-                    completedAt: null,
-                    step: {
-                        id: "step-2",
-                        title: "Step 2",
-                        orderIndex: 1,
-                        pointsReward: 60,
-                    },
-                },
-            ],
-        });
+        getParticipationFindUniqueMock().mockResolvedValue(
+            makeParticipation({
+                totalScore: 90,
+                stepProgress: [
+                    makeStepProgress({
+                        stepId: "step-1",
+                        isCompleted: true,
+                        cluesUsed: 1,
+                        pointsEarned: 90,
+                        completedAt: new Date("2026-01-01T10:10:00.000Z"),
+                    }),
+                    makeStepProgress({
+                        stepId: "step-2",
+                        isCompleted: false,
+                        cluesUsed: 0,
+                        pointsEarned: 0,
+                        completedAt: null,
+                        step: {
+                            id: "step-2",
+                            title: "Step 2",
+                            orderIndex: 1,
+                            pointsReward: 60,
+                            clues: [],
+                        },
+                    }),
+                ],
+            }),
+        );
 
         // Act + Assert
         await expect(
