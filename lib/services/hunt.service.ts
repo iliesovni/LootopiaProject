@@ -1,6 +1,6 @@
 import { huntOwnerDetailSelect, huntPublicDetailSelect, huntPublicListSelect } from "@/lib/db/includes/hunt.include";
 import { prisma } from "@/lib/db/prisma";
-import { HuntStatus, HuntVisibility, Prisma } from "@prisma/client";
+import { HuntStatus, HuntVisibility, Prisma, Role } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 export class HuntNotFoundError extends Error {
@@ -47,6 +47,7 @@ type UpdateHuntInput = {
 type DeleteHuntInput = {
     huntId: string;
     currentUserId: string;
+    currentUserRole: Role;
 };
 
 type GetHuntByIdInput = {
@@ -204,16 +205,24 @@ export async function updateHunt({ huntId, currentUserId, data }: UpdateHuntInpu
     });
 }
 
-export async function deleteHunt({ huntId, currentUserId }: DeleteHuntInput) {
+export async function deleteHunt({ huntId, currentUserId, currentUserRole }: DeleteHuntInput) {
     const existingHunt = await prisma.hunt.findUnique({
         where: { id: huntId },
+        select: {
+            id: true,
+            createdById: true,
+            isDeleted: true,
+        },
     });
 
-    if (!existingHunt) {
+    if (!existingHunt || existingHunt.isDeleted) {
         throw new HuntNotFoundError();
     }
 
-    if (existingHunt.createdById !== currentUserId) {
+    const isOwner = existingHunt.createdById === currentUserId;
+    const isAdmin = currentUserRole === Role.ADMIN;
+
+    if (!isOwner && !isAdmin) {
         throw new HuntForbiddenError();
     }
 

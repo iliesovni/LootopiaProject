@@ -116,6 +116,7 @@ export async function DELETE(
         await deleteHunt({
             huntId: id,
             currentUserId: currentUser.id,
+            currentUserRole: currentUser.role,
         });
 
         return NextResponse.json({
