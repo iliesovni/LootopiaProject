@@ -1,4 +1,4 @@
-import { Difficulty } from "@prisma/client";
+import { Difficulty, HuntVisibility } from "@prisma/client";
 import { z } from "zod";
 
 export const createHuntSchema = z
@@ -7,7 +7,8 @@ export const createHuntSchema = z
     description: z.string().optional().nullable(),
     location: z.string().min(2, "La localisation est obligatoire."),
     difficulty: z.enum(Difficulty),
-    isPublic: z.boolean().optional(),
+    visibility: z.enum(HuntVisibility).optional(),
+    accessCode: z.string().regex(/^\d{8}$/).optional(),
     startLat: z.number().min(-90).max(90),
     startLng: z.number().min(-180).max(180),
 });
@@ -18,7 +19,8 @@ export const updateHuntSchema = z
     description: z.string().optional().nullable(),
     location: z.string().min(2, "La localisation est obligatoire.").optional(),
     difficulty: z.enum(Difficulty).optional(),
-    isPublic: z.boolean().optional(),
+    visibility: z.enum(HuntVisibility).optional(),
+    accessCode: z.string().regex(/^\d{8}$/).optional(),
     startLat: z.number().min(-90).max(90).optional(),
     startLng: z.number().min(-180).max(180).optional(),
 })

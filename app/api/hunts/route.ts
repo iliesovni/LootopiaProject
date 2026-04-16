@@ -1,6 +1,6 @@
 import { AuthError } from "@/lib/auth/current-user";
 import { requireAuth } from "@/lib/auth/guards";
-import { huntCreatedSelect, huntPublicListSelect } from "@/lib/db/includes/hunt.include";
+import { huntOwnerDetailSelect, huntPublicListSelect } from "@/lib/db/includes/hunt.include";
 import { prisma } from "@/lib/db/prisma";
 import { createHuntSchema } from "@/schemas/hunt";
 import { HuntMode, HuntStatus, HuntVisibility, Prisma, Role } from "@prisma/client";
@@ -71,9 +71,6 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        let mode: HuntMode = HuntMode.COMMUNITY;
-        let partnerId: string | null = null;
-
         if (currentUser.role === Role.PARTNER) {
             const partnerProfile = await prisma.partner.findUnique({
                 where: { userId: currentUser.id },
@@ -89,19 +86,33 @@ export async function POST(request: NextRequest) {
                     { status: 400 },
                 );
             }
-
-            mode = HuntMode.PARTNER;
-            partnerId = partnerProfile.id;
         }
+
+        const visibility = validation.data.visibility ?? HuntVisibility.PUBLIC;
+
+        const accessCode = visibility === HuntVisibility.PRIVATE ? validation.data.accessCode ?? null : null;
 
         const hunt = await prisma.hunt.create({
             data: {
-                ...validation.data,
+                title: validation.data.title,
+                description: validation.data.description,
+                location: validation.data.location,
+                difficulty: validation.data.difficulty,
+                startLat: validation.data.startLat,
+                startLng: validation.data.startLng,
+
+                visibility,
+                accessCode,
+
+                status: HuntStatus.DRAFT,
+
                 createdById: currentUser.id,
-                mode,
-                partnerId,
+                mode:
+                    currentUser.role === Role.PARTNER
+                        ? HuntMode.PARTNER
+                        : HuntMode.COMMUNITY,
             },
-            select: huntCreatedSelect,
+            select: huntOwnerDetailSelect,
         });
 
         return NextResponse.json(

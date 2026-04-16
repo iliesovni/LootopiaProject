@@ -16,7 +16,6 @@ describe("integration - startParticipation", () => {
         visibility: HuntVisibility;
         isDeleted: boolean;
         accessCode: string | null;
-        isPublic: boolean;
     }>) {
         const creator = await prisma.user.create({
             data: {
@@ -33,7 +32,6 @@ describe("integration - startParticipation", () => {
                 description: "Hunt créée pour test d'intégration",
                 location: "Paris",
                 difficulty: Difficulty.EASY,
-                isPublic: overrides?.isPublic ?? true,
                 startLat: 48.8566,
                 startLng: 2.3522,
                 createdById: creator.id,
@@ -216,7 +214,7 @@ describe("integration - startParticipation", () => {
         const hunt = await createPublishedHunt(unique, {
             visibility: HuntVisibility.PRIVATE,
             accessCode: "12345678",
-            isPublic: false,
+
         });
 
         // Act + Assert
@@ -235,7 +233,7 @@ describe("integration - startParticipation", () => {
         const hunt = await createPublishedHunt(unique, {
             visibility: HuntVisibility.PRIVATE,
             accessCode: "12345678",
-            isPublic: false,
+
         });
 
         // Act

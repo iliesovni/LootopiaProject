@@ -36,7 +36,6 @@ describe("integration - finishParticipation", () => {
                 description: "Hunt créée pour test d'intégration finishParticipation",
                 location: "Paris",
                 difficulty: Difficulty.EASY,
-                isPublic: true,
                 startLat: 48.8566,
                 startLng: 2.3522,
                 createdById: creator.id,

@@ -17,7 +17,7 @@
     "db:studio": "prisma studio",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
+    "test:coverage": "jest --coverage --detectOpenHandles",
     "test:integration": "dotenv -e .env.test -- jest --config jest.integration.config.ts --runInBand",
     "db:test:generate": "dotenv -e .env.test -- prisma generate",
     "db:test:reset": "npm run db:test:generate && dotenv -e .env.test -- prisma migrate reset --force && dotenv -e .env.test -- prisma db seed",

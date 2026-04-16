@@ -31,7 +31,6 @@ describe("integration - useClue", () => {
                 description: "Hunt créée pour test d'intégration useClue",
                 location: "Paris",
                 difficulty: Difficulty.EASY,
-                isPublic: true,
                 startLat: 48.8566,
                 startLng: 2.3522,
                 createdById: creator.id,
