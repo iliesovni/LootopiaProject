@@ -1,9 +1,10 @@
+import { apiError, apiSuccess } from "@/lib/api/responses";
 import { apiValidationError } from "@/lib/api/validation";
 import { AuthError } from "@/lib/auth/current-user";
 import { requireAuth } from "@/lib/auth/guards";
 import { createClue, mapClueError } from "@/lib/services/clue.service";
 import { createClueSchema } from "@/schemas/clue";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
 export async function POST(request: NextRequest) {
     try {
@@ -21,13 +22,7 @@ export async function POST(request: NextRequest) {
             data: validation.data,
         });
 
-        return NextResponse.json(
-            {
-                message: "Indice créé avec succès.",
-                data: createdClue,
-            },
-            { status: 201 },
-        );
+        return apiSuccess("Indice créé avec succès.", createdClue, 201);
     } catch (error) {
         console.error("POST /api/clues error:", error);
 
@@ -35,21 +30,13 @@ export async function POST(request: NextRequest) {
         if (mapped) return mapped;
 
         if (error instanceof AuthError) {
-            return NextResponse.json(
-                {
-                    message: error.message,
-                    error: error.code,
-                },
-                { status: error.status },
-            );
+            return apiError(error.message, error.code, error.status);
         }
 
-        return NextResponse.json(
-            {
-                message: "Erreur lors de la création de l'indice.",
-                error: "INTERNAL_SERVER_ERROR",
-            },
-            { status: 500 },
+        return apiError(
+            "Erreur lors de la création de l'indice.",
+            "INTERNAL_SERVER_ERROR",
+            500,
         );
     }
 }

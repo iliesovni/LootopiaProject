@@ -1,10 +1,10 @@
+import { apiError } from "@/lib/api/responses";
 import {
     participationProgressInternalSelect,
     participationPublicSelect,
 } from "@/lib/db/includes/participation.include";
 import { prisma } from "@/lib/db/prisma";
 import { HuntStatus, HuntVisibility, ParticipationStatus, Prisma, Role } from "@prisma/client";
-import { NextResponse } from "next/server";
 
 export class ParticipationError extends Error {
     constructor(code: string) {
@@ -69,7 +69,7 @@ type CompleteStepInput = {
     stepId: string;
 };
 
-type UseClueInput = {
+type ApplyClueInput = {
     participationId: string;
     userId: string;
     stepId: string;
@@ -436,7 +436,7 @@ export async function completeStep({ participationId, userId, stepId }: Complete
     };
 }
 
-export async function useClue({ participationId, userId, stepId }: UseClueInput) {
+export async function applyClue({ participationId, userId, stepId }: ApplyClueInput) {
     const participation = await prisma.participation.findUnique({
         where: { id: participationId },
         select: participationProgressInternalSelect,
@@ -599,174 +599,136 @@ export function mapParticipationError(error: unknown) {
     if (error instanceof ParticipationError) {
         switch (error.message) {
             case "USER_NOT_FOUND":
-                return NextResponse.json(
-                    {
-                        message: "Utilisateur introuvable.",
-                        error: "USER_NOT_FOUND",
-                    },
-                    { status: 404 },
+                return apiError(
+                    "Utilisateur introuvable.",
+                    "USER_NOT_FOUND",
+                    404,
                 );
 
             case "USER_NOT_PLAYER":
-                return NextResponse.json(
-                    {
-                        message: "Seul un joueur peut démarrer une chasse.",
-                        error: "USER_NOT_PLAYER",
-                    },
-                    { status: 403 },
+                return apiError(
+                    "Seul un joueur peut démarrer une chasse.",
+                    "USER_NOT_PLAYER",
+                    403,
                 );
 
             case "HUNT_NOT_FOUND":
-                return NextResponse.json(
-                    {
-                        message: "Chasse introuvable.",
-                        error: "HUNT_NOT_FOUND",
-                    },
-                    { status: 404 },
+                return apiError(
+                    "Chasse introuvable.",
+                    "HUNT_NOT_FOUND",
+                    404,
                 );
 
             case "HUNT_NOT_PUBLISHED":
-                return NextResponse.json(
-                    {
-                        message: "Cette chasse n'est pas encore publiée.",
-                        error: "HUNT_NOT_PUBLISHED",
-                    },
-                    { status: 409 },
+                return apiError(
+                    "Cette chasse n'est pas encore publiée.",
+                    "HUNT_NOT_PUBLISHED",
+                    409,
                 );
 
             case "ACCESS_CODE_REQUIRED":
-                return NextResponse.json(
-                    {
-                        message: "Un code d'accès est requis pour cette chasse privée.",
-                        error: "ACCESS_CODE_REQUIRED",
-                    },
-                    { status: 403 },
+                return apiError(
+                    "Un code d'accès est requis pour cette chasse privée.",
+                    "ACCESS_CODE_REQUIRED",
+                    403,
                 );
 
             case "INVALID_ACCESS_CODE":
-                return NextResponse.json(
-                    {
-                        message: "Le code d'accès fourni est invalide.",
-                        error: "INVALID_ACCESS_CODE",
-                    },
-                    { status: 403 },
+                return apiError(
+                    "Le code d'accès fourni est invalide.",
+                    "INVALID_ACCESS_CODE",
+                    403,
                 );
 
             case "HUNT_HAS_NO_STEPS":
-                return NextResponse.json(
-                    {
-                        message: "Impossible de démarrer une chasse sans étapes.",
-                        error: "HUNT_HAS_NO_STEPS",
-                    },
-                    { status: 400 },
+                return apiError(
+                    "Impossible de démarrer une chasse sans étapes.",
+                    "HUNT_HAS_NO_STEPS",
+                    400,
                 );
 
             case "PARTICIPATION_ALREADY_EXISTS":
-                return NextResponse.json(
-                    {
-                        message: "Ce joueur a déjà une participation pour cette chasse.",
-                        error: "PARTICIPATION_ALREADY_EXISTS",
-                    },
-                    { status: 409 },
+                return apiError(
+                    "Ce joueur a déjà une participation pour cette chasse.",
+                    "PARTICIPATION_ALREADY_EXISTS",
+                    409,
                 );
 
             case "INVALID_RELATION":
-                return NextResponse.json(
-                    {
-                        message: "Relation invalide lors du démarrage de la participation.",
-                        error: "INVALID_RELATION",
-                    },
-                    { status: 400 },
+                return apiError(
+                    "Relation invalide lors du démarrage de la participation.",
+                    "INVALID_RELATION",
+                    400,
                 );
 
             case "PARTICIPATION_NOT_IN_PROGRESS":
-                return NextResponse.json(
-                    {
-                        message: "La participation n'est pas en cours.",
-                        error: "PARTICIPATION_NOT_IN_PROGRESS",
-                    },
-                    { status: 409 },
+                return apiError(
+                    "La participation n'est pas en cours.",
+                    "PARTICIPATION_NOT_IN_PROGRESS",
+                    409,
                 );
 
             case "STEP_NOT_IN_PARTICIPATION":
-                return NextResponse.json(
-                    {
-                        message: "Cette étape n'appartient pas à la participation.",
-                        error: "STEP_NOT_IN_PARTICIPATION",
-                    },
-                    { status: 404 },
+                return apiError(
+                    "Cette étape n'appartient pas à la participation.",
+                    "STEP_NOT_IN_PARTICIPATION",
+                    404,
                 );
 
             case "STEP_MISCONFIGURED":
-                return NextResponse.json(
-                    {
-                        message: "Step mal configurée.",
-                        error: "STEP_MISCONFIGURED",
-                    },
-                    { status: 500 },
+                return apiError(
+                    "Étape mal configurée.",
+                    "STEP_MISCONFIGURED",
+                    500,
                 );
 
             case "STEP_ALREADY_COMPLETED":
-                return NextResponse.json(
-                    {
-                        message: "Cette étape est déjà complétée.",
-                        error: "STEP_ALREADY_COMPLETED",
-                    },
-                    { status: 409 },
+                return apiError(
+                    "Cette étape est déjà complétée.",
+                    "STEP_ALREADY_COMPLETED",
+                    409,
                 );
 
             case "STEP_OUT_OF_ORDER":
-                return NextResponse.json(
-                    {
-                        message: "Impossible d'effectuer cette action sur cette étape maintenant.",
-                        error: "STEP_OUT_OF_ORDER",
-                    },
-                    { status: 409 },
+                return apiError(
+                    "Impossible d'effectuer cette action sur cette étape maintenant.",
+                    "STEP_OUT_OF_ORDER",
+                    409,
                 );
 
             case "PARTICIPATION_NOT_FOUND":
-                return NextResponse.json(
-                    {
-                        message: "Participation introuvable.",
-                        error: "PARTICIPATION_NOT_FOUND",
-                    },
-                    { status: 404 },
+                return apiError(
+                    "Participation introuvable.",
+                    "PARTICIPATION_NOT_FOUND",
+                    404,
                 );
 
             case "PARTICIPATION_FORBIDDEN":
-                return NextResponse.json(
-                    {
-                        message: "Vous n'avez pas accès à cette participation.",
-                        error: "PARTICIPATION_FORBIDDEN",
-                    },
-                    { status: 403 },
+                return apiError(
+                    "Vous n'avez pas accès à cette participation.",
+                    "PARTICIPATION_FORBIDDEN",
+                    403,
                 );
 
             case "NO_MORE_CLUES_AVAILABLE":
-                return NextResponse.json(
-                    {
-                        message: "Tous les indices ont déjà été utilisés.",
-                        error: "NO_MORE_CLUES_AVAILABLE",
-                    },
-                    { status: 409 },
+                return apiError(
+                    "Tous les indices ont déjà été utilisés.",
+                    "NO_MORE_CLUES_AVAILABLE",
+                    409,
                 );
 
             case "PARTICIPATION_HAS_REMAINING_STEPS":
-                return NextResponse.json(
-                    {
-                        message: "Toutes les étapes doivent être complétées avant de terminer la participation.",
-                        error: "PARTICIPATION_HAS_REMAINING_STEPS",
-                    },
-                    { status: 409 },
+                return apiError(
+                    "Toutes les étapes doivent être complétées avant de terminer la participation.",
+                    "PARTICIPATION_HAS_REMAINING_STEPS",
+                    409,
                 );
 
             case "ACCESS_CODE_ATTEMPTS_EXCEEDED":
-                return NextResponse.json(
-                    {
-                        message: "Le nombre maximum de tentatives pour ce code d'accès a été atteint.",
-                        error: "ACCESS_CODE_ATTEMPTS_EXCEEDED",
-                    },
-                    { status: 403 },
+                return apiError(
+                    "Le nombre maximum de tentatives pour ce code d'accès a été atteint.",
+                    "ACCESS_CODE_ATTEMPTS_EXCEEDED",
+                    403,
                 );
         }
     }

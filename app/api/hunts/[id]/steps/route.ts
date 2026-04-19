@@ -1,9 +1,10 @@
+import { apiError, apiSuccess } from "@/lib/api/responses";
 import { apiValidationError } from "@/lib/api/validation";
 import { AuthError } from "@/lib/auth/current-user";
 import { requireAuth } from "@/lib/auth/guards";
 import { createStep, mapStepError } from "@/lib/services/step.service";
 import { createStepSchema } from "@/schemas/step";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
 type RouteContext = {
     params: Promise<{
@@ -35,13 +36,7 @@ export async function POST(
             data: validation.data,
         });
 
-        return NextResponse.json(
-            {
-                message: "Étape créée avec succès.",
-                data: step,
-            },
-            { status: 201 },
-        );
+        return apiSuccess("Étape créée avec succès.", step, 201);
     } catch (error) {
         console.error("POST /api/hunts/[id]/steps error:", error);
 
@@ -49,21 +44,13 @@ export async function POST(
         if (mapped) return mapped;
 
         if (error instanceof AuthError) {
-            return NextResponse.json(
-                {
-                    message: error.message,
-                    error: error.code,
-                },
-                { status: error.status },
-            );
+            return apiError(error.message, error.code, error.status);
         }
 
-        return NextResponse.json(
-            {
-                message: "Erreur lors de la création de l'étape.",
-                error: "INTERNAL_SERVER_ERROR",
-            },
-            { status: 500 },
+        return apiError(
+            "Erreur lors de la création de l'étape.",
+            "INTERNAL_SERVER_ERROR",
+            500,
         );
     }
 }

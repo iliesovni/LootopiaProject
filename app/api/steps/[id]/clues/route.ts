@@ -1,7 +1,7 @@
+import { apiError, apiSuccess } from "@/lib/api/responses";
 import { AuthError } from "@/lib/auth/current-user";
 import { requireAuth } from "@/lib/auth/guards";
 import { listCluesForStep, mapStepError } from "@/lib/services/step.service";
-import { NextResponse } from "next/server";
 
 export async function GET(
     _request: Request,
@@ -16,12 +16,9 @@ export async function GET(
             currentUserId: currentUser.id,
         });
 
-        return NextResponse.json({
-            message: "Indices de l'étape récupérés avec succès.",
-            data: {
-                count: clues.length,
-                items: clues,
-            },
+        return apiSuccess("Indices de l'étape récupérés avec succès.", {
+            count: clues.length,
+            items: clues,
         });
     } catch (error) {
         console.error("GET /api/steps/[id]/clues error:", error);
@@ -30,21 +27,13 @@ export async function GET(
         if (mapped) return mapped;
 
         if (error instanceof AuthError) {
-            return NextResponse.json(
-                {
-                    message: error.message,
-                    error: error.code,
-                },
-                { status: error.status },
-            );
+            return apiError(error.message, error.code, error.status);
         }
 
-        return NextResponse.json(
-            {
-                message: "Erreur lors de la récupération des indices.",
-                error: "INTERNAL_SERVER_ERROR",
-            },
-            { status: 500 },
+        return apiError(
+            "Erreur lors de la récupération des indices.",
+            "INTERNAL_SERVER_ERROR",
+            500,
         );
     }
 }

@@ -1,11 +1,12 @@
+import { apiError, apiSuccess } from "@/lib/api/responses";
+import { apiValidationError } from "@/lib/api/validation";
 import { AuthError } from "@/lib/auth/current-user";
 import { requireAuth } from "@/lib/auth/guards";
 import { huntOwnerDetailSelect, huntPublicListSelect } from "@/lib/db/includes/hunt.include";
 import { prisma } from "@/lib/db/prisma";
 import { createHuntSchema } from "@/schemas/hunt";
 import { HuntMode, HuntStatus, HuntVisibility, Prisma, Role } from "@prisma/client";
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
+import { NextRequest } from "next/server";
 
 export async function GET() {
     try {
@@ -21,22 +22,17 @@ export async function GET() {
             },
         });
 
-        return NextResponse.json({
-            message: "Chasses récupérées avec succès.",
-            data: {
-                count: hunts.length,
-                items: hunts,
-            },
+        return apiSuccess("Chasses récupérées avec succès.", {
+            count: hunts.length,
+            items: hunts,
         });
     } catch (error) {
         console.error("GET /api/hunts error:", error);
 
-        return NextResponse.json(
-            {
-                message: "Erreur lors de la récupération des chasses.",
-                error: "INTERNAL_SERVER_ERROR",
-            },
-            { status: 500 },
+        return apiError(
+            "Erreur lors de la récupération des chasses.",
+            "INTERNAL_SERVER_ERROR",
+            500,
         );
     }
 }
@@ -49,25 +45,14 @@ export async function POST(request: NextRequest) {
         const validation = createHuntSchema.safeParse(body);
 
         if (!validation.success) {
-            return NextResponse.json(
-                {
-                    message: "Payload invalide.",
-                    error: "VALIDATION_ERROR",
-                    data: {
-                        details: z.flattenError(validation.error),
-                    },
-                },
-                { status: 400 },
-            );
+            return apiValidationError(validation.error);
         }
 
         if (currentUser.role !== Role.PLAYER && currentUser.role !== Role.PARTNER) {
-            return NextResponse.json(
-                {
-                    message: "Ce rôle n'est pas autorisé à créer une chasse.",
-                    error: "FORBIDDEN_ROLE",
-                },
-                { status: 403 },
+            return apiError(
+                "Ce rôle n'est pas autorisé à créer une chasse.",
+                "FORBIDDEN_ROLE",
+                403,
             );
         }
 
@@ -78,12 +63,10 @@ export async function POST(request: NextRequest) {
             });
 
             if (!partnerProfile) {
-                return NextResponse.json(
-                    {
-                        message: "Aucun profil partenaire associé à cet utilisateur.",
-                        error: "PARTNER_PROFILE_NOT_FOUND",
-                    },
-                    { status: 400 },
+                return apiError(
+                    "Aucun profil partenaire associé à cet utilisateur.",
+                    "PARTNER_PROFILE_NOT_FOUND",
+                    400,
                 );
             }
         }
@@ -115,44 +98,28 @@ export async function POST(request: NextRequest) {
             select: huntOwnerDetailSelect,
         });
 
-        return NextResponse.json(
-            {
-                message: "Chasse créée avec succès.",
-                data: hunt,
-            },
-            { status: 201 },
-        );
+        return apiSuccess("Chasse créée avec succès.", hunt, 201);
     } catch (error) {
         console.error("POST /api/hunts error:", error);
 
         if (error instanceof AuthError) {
-            return NextResponse.json(
-                {
-                    message: error.message,
-                    error: error.code,
-                },
-                { status: error.status },
-            );
+            return apiError(error.message, error.code, error.status);
         }
 
         if (error instanceof Prisma.PrismaClientKnownRequestError) {
             if (error.code === "P2003") {
-                return NextResponse.json(
-                    {
-                        message: "Une relation fournie est invalide.",
-                        error: "INVALID_REFERENCE_ID",
-                    },
-                    { status: 400 },
+                return apiError(
+                    "Une relation fournie est invalide.",
+                    "INVALID_REFERENCE_ID",
+                    400,
                 );
             }
         }
 
-        return NextResponse.json(
-            {
-                message: "Erreur lors de la création de la chasse.",
-                error: "INTERNAL_SERVER_ERROR",
-            },
-            { status: 500 },
+        return apiError(
+            "Erreur lors de la création de la chasse.",
+            "INTERNAL_SERVER_ERROR",
+            500,
         );
     }
 }

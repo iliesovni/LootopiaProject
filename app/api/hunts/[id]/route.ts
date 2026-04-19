@@ -1,10 +1,10 @@
 import { apiError, apiSuccess } from "@/lib/api/responses";
+import { apiValidationError } from "@/lib/api/validation";
 import { AuthError, getOptionalCurrentUser } from "@/lib/auth/current-user";
 import { requireAuth } from "@/lib/auth/guards";
 import { deleteHunt, getHuntById, mapHuntError, updateHunt } from "@/lib/services/hunt.service";
 import { updateHuntSchema } from "@/schemas/hunt";
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
+import { NextRequest } from "next/server";
 
 type RouteContext = {
     params: Promise<{
@@ -25,22 +25,17 @@ export async function GET(
             currentUserId: currentUser?.id,
         });
 
-        return NextResponse.json({
-            message: "Chasse trouvée.",
-            data: hunt,
-        });
+        return apiSuccess("Chasse trouvée.", hunt);
     } catch (error) {
         console.error("[HUNT_ERROR]", error);
 
         const mapped = mapHuntError(error);
         if (mapped) return mapped;
 
-        return NextResponse.json(
-            {
-                message: "Erreur lors de la récupération de la chasse.",
-                error: "INTERNAL_SERVER_ERROR",
-            },
-            { status: 500 },
+        return apiError(
+            "Erreur lors de la récupération de la chasse.",
+            "INTERNAL_SERVER_ERROR",
+            500,
         );
     }
 }
@@ -58,16 +53,7 @@ export async function PATCH(
         const validation = updateHuntSchema.safeParse(body);
 
         if (!validation.success) {
-            return NextResponse.json(
-                {
-                    message: "Payload invalide.",
-                    error: "VALIDATION_ERROR",
-                    data: {
-                        details: z.flattenError(validation.error),
-                    },
-                },
-                { status: 400 },
-            );
+            return apiValidationError(validation.error);
         }
 
         const updatedHunt = await updateHunt({
@@ -76,10 +62,7 @@ export async function PATCH(
             data: validation.data,
         });
 
-        return NextResponse.json({
-            message: "Chasse mise à jour avec succès.",
-            data: updatedHunt,
-        });
+        return apiSuccess("Chasse mise à jour avec succès.", updatedHunt);
     } catch (error) {
         console.error("PATCH /api/hunts/[id] error:", error);
 
@@ -87,21 +70,13 @@ export async function PATCH(
         if (mapped) return mapped;
 
         if (error instanceof AuthError) {
-            return NextResponse.json(
-                {
-                    message: error.message,
-                    error: error.code,
-                },
-                { status: error.status },
-            );
+            return apiError(error.message, error.code, error.status);
         }
 
-        return NextResponse.json(
-            {
-                message: "Erreur lors de la mise à jour de la chasse.",
-                error: "INTERNAL_SERVER_ERROR",
-            },
-            { status: 500 },
+        return apiError(
+            "Erreur lors de la mise à jour de la chasse.",
+            "INTERNAL_SERVER_ERROR",
+            500,
         );
     }
 }

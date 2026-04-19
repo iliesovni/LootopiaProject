@@ -1,9 +1,10 @@
+import { apiError, apiSuccess } from "@/lib/api/responses";
 import { apiValidationError } from "@/lib/api/validation";
 import { AuthError } from "@/lib/auth/current-user";
 import { requireAuth } from "@/lib/auth/guards";
 import { deleteStep, getStepById, mapStepError, updateStep } from "@/lib/services/step.service";
 import { updateStepSchema } from "@/schemas/step";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
 type RouteContext = {
     params: Promise<{
@@ -24,10 +25,7 @@ export async function GET(
             currentUserId: currentUser.id,
         });
 
-        return NextResponse.json({
-            message: "Étape récupérée.",
-            data: step,
-        });
+        return apiSuccess("Étape récupérée.", step);
     } catch (error) {
         console.error("GET /api/steps/[id] error:", error);
 
@@ -35,21 +33,13 @@ export async function GET(
         if (mapped) return mapped;
 
         if (error instanceof AuthError) {
-            return NextResponse.json(
-                {
-                    message: error.message,
-                    error: error.code,
-                },
-                { status: error.status },
-            );
+            return apiError(error.message, error.code, error.status);
         }
 
-        return NextResponse.json(
-            {
-                message: "Erreur lors de la récupération de l'étape.",
-                error: "INTERNAL_SERVER_ERROR",
-            },
-            { status: 500 },
+        return apiError(
+            "Erreur lors de la récupération de l'étape.",
+            "INTERNAL_SERVER_ERROR",
+            500,
         );
     }
 }
@@ -75,10 +65,7 @@ export async function PATCH(
             data: validation.data,
         });
 
-        return NextResponse.json({
-            message: "Étape mise à jour avec succès.",
-            data: updatedStep,
-        });
+        return apiSuccess("Étape mise à jour avec succès.", updatedStep);
     } catch (error) {
         console.error("PATCH /api/steps/[id] error:", error);
 
@@ -86,21 +73,13 @@ export async function PATCH(
         if (mapped) return mapped;
 
         if (error instanceof AuthError) {
-            return NextResponse.json(
-                {
-                    message: error.message,
-                    error: error.code,
-                },
-                { status: error.status },
-            );
+            return apiError(error.message, error.code, error.status);
         }
 
-        return NextResponse.json(
-            {
-                message: "Erreur lors de la mise à jour de l'étape.",
-                error: "INTERNAL_SERVER_ERROR",
-            },
-            { status: 500 },
+        return apiError(
+            "Erreur lors de la mise à jour de l'étape.",
+            "INTERNAL_SERVER_ERROR",
+            500,
         );
     }
 }
@@ -118,9 +97,7 @@ export async function DELETE(
             currentUserId: currentUser.id,
         });
 
-        return NextResponse.json({
-            message: "Étape supprimée avec succès.",
-        });
+        return apiSuccess("Étape supprimée avec succès.");
     } catch (error) {
         console.error("DELETE /api/steps/[id] error:", error);
 
@@ -128,21 +105,13 @@ export async function DELETE(
         if (mapped) return mapped;
 
         if (error instanceof AuthError) {
-            return NextResponse.json(
-                {
-                    message: error.message,
-                    error: error.code,
-                },
-                { status: error.status },
-            );
+            return apiError(error.message, error.code, error.status);
         }
 
-        return NextResponse.json(
-            {
-                message: "Erreur lors de la suppression de l'étape.",
-                error: "INTERNAL_SERVER_ERROR",
-            },
-            { status: 500 },
+        return apiError(
+            "Erreur lors de la suppression de l'étape.",
+            "INTERNAL_SERVER_ERROR",
+            500,
         );
     }
 }

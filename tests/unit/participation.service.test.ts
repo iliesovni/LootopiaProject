@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/db/prisma";
 import {
+    applyClue,
     completeStep,
     finishParticipation,
     getTargetStepProgress,
     ParticipationError,
     startParticipation,
-    useClue,
 } from "@/lib/services/participation.service";
 import { HuntStatus, HuntVisibility, ParticipationStatus, Role } from "@prisma/client";
 
@@ -297,7 +297,7 @@ describe("participation.service - useClue", () => {
         });
 
         // Act
-        const result = await useClue({
+        const result = await applyClue({
             participationId: "participation-1",
             userId: "user-1",
             stepId: "step-1",
@@ -341,7 +341,7 @@ describe("participation.service - useClue", () => {
 
         // Act + Assert
         await expect(
-            useClue({
+            applyClue({
                 participationId: "participation-1",
                 userId: "user-1",
                 stepId: "step-1",
@@ -367,7 +367,7 @@ describe("participation.service - useClue", () => {
 
         // Act + Assert
         await expect(
-            useClue({
+            applyClue({
                 participationId: "participation-1",
                 userId: "user-1",
                 stepId: "step-1",
@@ -396,7 +396,7 @@ describe("participation.service - useClue", () => {
 
         // Act + Assert
         await expect(
-            useClue({
+            applyClue({
                 participationId: "participation-1",
                 userId: "user-1",
                 stepId: "step-1",
