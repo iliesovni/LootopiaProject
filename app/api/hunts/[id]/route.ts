@@ -1,3 +1,4 @@
+import { apiError, apiSuccess } from "@/lib/api/responses";
 import { AuthError, getOptionalCurrentUser } from "@/lib/auth/current-user";
 import { requireAuth } from "@/lib/auth/guards";
 import { deleteHunt, getHuntById, mapHuntError, updateHunt } from "@/lib/services/hunt.service";
@@ -119,9 +120,7 @@ export async function DELETE(
             currentUserRole: currentUser.role,
         });
 
-        return NextResponse.json({
-            message: "Chasse supprimée avec succès.",
-        });
+        return apiSuccess("Hunt deleted successfully");
     } catch (error) {
         console.error("DELETE /api/hunts/[id] error:", error);
 
@@ -129,21 +128,13 @@ export async function DELETE(
         if (mapped) return mapped;
 
         if (error instanceof AuthError) {
-            return NextResponse.json(
-                {
-                    message: error.message,
-                    error: error.code,
-                },
-                { status: error.status },
-            );
+            return apiError(error.message, error.code, error.status);
         }
 
-        return NextResponse.json(
-            {
-                message: "Erreur lors de la suppression de la chasse.",
-                error: "INTERNAL_SERVER_ERROR",
-            },
-            { status: 500 },
+        return apiError(
+            "Internal server error",
+            "INTERNAL_SERVER_ERROR",
+            500,
         );
     }
 }

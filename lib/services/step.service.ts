@@ -271,8 +271,8 @@ export async function updateStep({ stepId, currentUserId, data }: UpdateStepInpu
         });
 
         const targetOrderIndex = Math.min(
-            Math.max(orderIndex, 1),
-            stepsCount,
+            Math.max(orderIndex, 0),
+            stepsCount - 1,
         );
 
         await tx.step.update({

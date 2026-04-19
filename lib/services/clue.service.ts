@@ -169,7 +169,7 @@ export async function createClue({ currentUserId, data }: CreateClueInput) {
                 select: { orderIndex: true },
             });
 
-            finalOrderIndex = lastClue ? lastClue.orderIndex + 1 : 1;
+            finalOrderIndex = lastClue ? lastClue.orderIndex + 1 : 0;
         } else {
             const existingClueAtSameIndex = await tx.clue.findFirst({
                 where: {
@@ -226,8 +226,8 @@ export async function updateClue({ clueId, currentUserId, data }: UpdateClueInpu
         });
 
         const targetOrderIndex = Math.min(
-            Math.max(orderIndex, 1),
-            cluesCount,
+            Math.max(orderIndex, 0),
+            cluesCount - 1,
         );
 
         await tx.clue.update({
