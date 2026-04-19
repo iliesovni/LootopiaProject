@@ -1,9 +1,9 @@
-import { apiError } from "@/lib/api/responses";
+import { apiError, apiSuccess } from "@/lib/api/responses";
 import { apiValidationError } from "@/lib/api/validation";
 import { AUTH_COOKIE_NAME, authCookieOptions } from "@/lib/auth/cookies";
 import { AuthServiceError, loginUser } from "@/lib/services/auth.service";
 import { loginSchema } from "@/schemas/auth";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
 export async function POST(request: NextRequest) {
     try {
@@ -17,13 +17,7 @@ export async function POST(request: NextRequest) {
 
         const { user, token } = await loginUser(validation.data);
 
-        const response = NextResponse.json(
-            {
-                message: "Connexion réussie.",
-                data: user,
-            },
-            { status: 200 },
-        );
+        const response = apiSuccess("Connexion réussie.", user, 200);
 
         response.cookies.set(AUTH_COOKIE_NAME, token, authCookieOptions);
 

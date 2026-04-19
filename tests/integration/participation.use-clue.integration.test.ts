@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
-import { ParticipationError, startParticipation, useClue } from "@/lib/services/participation.service";
+import { applyClue, ParticipationError, startParticipation } from "@/lib/services/participation.service";
 import {
     ARMarkerType,
     Difficulty,
@@ -108,7 +108,7 @@ describe("integration - useClue", () => {
         const firstStepId = hunt.steps[0].id;
 
         // Act
-        const result = await useClue({
+        const result = await applyClue({
             participationId: participation.id,
             userId: player.id,
             stepId: firstStepId,
@@ -162,14 +162,14 @@ describe("integration - useClue", () => {
 
         const firstStepId = hunt.steps[0].id;
 
-        await useClue({
+        await applyClue({
             participationId: participation.id,
             userId: player.id,
             stepId: firstStepId,
         });
 
         // Act
-        const result = await useClue({
+        const result = await applyClue({
             participationId: participation.id,
             userId: player.id,
             stepId: firstStepId,
@@ -219,13 +219,13 @@ describe("integration - useClue", () => {
 
         const firstStepId = hunt.steps[0].id;
 
-        await useClue({
+        await applyClue({
             participationId: participation.id,
             userId: player.id,
             stepId: firstStepId,
         });
 
-        await useClue({
+        await applyClue({
             participationId: participation.id,
             userId: player.id,
             stepId: firstStepId,
@@ -233,7 +233,7 @@ describe("integration - useClue", () => {
 
         // Act + Assert
         await expect(
-            useClue({
+            applyClue({
                 participationId: participation.id,
                 userId: player.id,
                 stepId: firstStepId,
@@ -277,7 +277,7 @@ describe("integration - useClue", () => {
 
         // Act + Assert
         await expect(
-            useClue({
+            applyClue({
                 participationId: participation.id,
                 userId: player.id,
                 stepId: secondStepId,
@@ -326,7 +326,7 @@ describe("integration - useClue", () => {
 
         // Act + Assert
         await expect(
-            useClue({
+            applyClue({
                 participationId: participation.id,
                 userId: otherUser.id,
                 stepId: firstStepId,

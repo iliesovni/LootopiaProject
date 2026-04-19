@@ -4,8 +4,11 @@ import { z } from "zod";
 export function apiValidationError(error: z.ZodError) {
     return NextResponse.json(
         {
-            message: "Payload invalide.",
-            error: "VALIDATION_ERROR",
+            success: false,
+            error: {
+                code: "VALIDATION_ERROR",
+                message: "Payload invalide.",
+            },
             data: {
                 details: z.flattenError(error),
             },

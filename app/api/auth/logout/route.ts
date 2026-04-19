@@ -1,15 +1,9 @@
-import { apiError } from "@/lib/api/responses";
+import { apiError, apiSuccess } from "@/lib/api/responses";
 import { AUTH_COOKIE_NAME, authCookieOptions } from "@/lib/auth/cookies";
-import { NextResponse } from "next/server";
 
 export async function POST() {
     try {
-        const response = NextResponse.json(
-            {
-                message: "Déconnexion réussie.",
-            },
-            { status: 200 },
-        );
+        const response = apiSuccess("Déconnexion réussie.");
 
         response.cookies.set(AUTH_COOKIE_NAME, "", {
             ...authCookieOptions,

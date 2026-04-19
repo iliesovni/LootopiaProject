@@ -1,7 +1,7 @@
+import { apiError } from "@/lib/api/responses";
 import { huntOwnerDetailSelect, huntPublicDetailSelect, huntPublicListSelect } from "@/lib/db/includes/hunt.include";
 import { prisma } from "@/lib/db/prisma";
 import { HuntStatus, HuntVisibility, Prisma, Role } from "@prisma/client";
-import { NextResponse } from "next/server";
 
 export class HuntNotFoundError extends Error {
     constructor() {
@@ -234,32 +234,26 @@ export async function deleteHunt({ huntId, currentUserId, currentUserRole }: Del
 
 export function mapHuntError(error: unknown) {
     if (error instanceof HuntNotFoundError) {
-        return NextResponse.json(
-            {
-                message: "Chasse introuvable.",
-                error: "HUNT_NOT_FOUND",
-            },
-            { status: 404 },
+        return apiError(
+            "Chasse introuvable.",
+            "HUNT_NOT_FOUND",
+            404,
         );
     }
 
     if (error instanceof HuntForbiddenError) {
-        return NextResponse.json(
-            {
-                message: "Accès refusé à cette chasse.",
-                error: "HUNT_FORBIDDEN",
-            },
-            { status: 403 },
+        return apiError(
+            "Accès refusé à cette chasse.",
+            "HUNT_FORBIDDEN",
+            403,
         );
     }
 
     if (error instanceof HuntNotEditableError) {
-        return NextResponse.json(
-            {
-                message: "Impossible de modifier une chasse publiée.",
-                error: "HUNT_NOT_EDITABLE",
-            },
-            { status: 409 },
+        return apiError(
+            "Impossible de modifier une chasse publiée.",
+            "HUNT_NOT_EDITABLE",
+            409,
         );
     }
 

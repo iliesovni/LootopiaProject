@@ -1,9 +1,10 @@
+import { apiError, apiSuccess } from "@/lib/api/responses";
 import { apiValidationError } from "@/lib/api/validation";
 import { AuthError } from "@/lib/auth/current-user";
 import { requireAuth } from "@/lib/auth/guards";
 import { deleteClue, getClueById, mapClueError, updateClue } from "@/lib/services/clue.service";
 import { updateClueSchema } from "@/schemas/clue";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
 type RouteContext = {
     params: Promise<{
@@ -24,10 +25,7 @@ export async function GET(
             currentUserId: currentUser.id,
         });
 
-        return NextResponse.json({
-            message: "Indice récupéré.",
-            data: clue,
-        });
+        return apiSuccess("Indice récupéré.", clue);
     } catch (error) {
         console.error("GET /api/clues/[id] error:", error);
 
@@ -35,21 +33,13 @@ export async function GET(
         if (mapped) return mapped;
 
         if (error instanceof AuthError) {
-            return NextResponse.json(
-                {
-                    message: error.message,
-                    error: error.code,
-                },
-                { status: error.status },
-            );
+            return apiError(error.message, error.code, error.status);
         }
 
-        return NextResponse.json(
-            {
-                message: "Erreur lors de la récupération de l'indice.",
-                error: "INTERNAL_SERVER_ERROR",
-            },
-            { status: 500 },
+        return apiError(
+            "Erreur lors de la récupération de l'indice.",
+            "INTERNAL_SERVER_ERROR",
+            500,
         );
     }
 }
@@ -75,10 +65,7 @@ export async function PATCH(
             data: validation.data,
         });
 
-        return NextResponse.json({
-            message: "Indice mis à jour avec succès.",
-            data: updatedClue,
-        });
+        return apiSuccess("Indice mis à jour avec succès.", updatedClue);
     } catch (error) {
         console.error("PATCH /api/clues/[id] error:", error);
 
@@ -86,21 +73,13 @@ export async function PATCH(
         if (mapped) return mapped;
 
         if (error instanceof AuthError) {
-            return NextResponse.json(
-                {
-                    message: error.message,
-                    error: error.code,
-                },
-                { status: error.status },
-            );
+            return apiError(error.message, error.code, error.status);
         }
 
-        return NextResponse.json(
-            {
-                message: "Erreur lors de la mise à jour de l'indice.",
-                error: "INTERNAL_SERVER_ERROR",
-            },
-            { status: 500 },
+        return apiError(
+            "Erreur lors de la mise à jour de l'indice.",
+            "INTERNAL_SERVER_ERROR",
+            500,
         );
     }
 }
@@ -118,9 +97,7 @@ export async function DELETE(
             currentUserId: currentUser.id,
         });
 
-        return NextResponse.json({
-            message: "Indice supprimé avec succès.",
-        });
+        return apiSuccess("Indice supprimé avec succès.");
     } catch (error) {
         console.error("DELETE /api/clues/[id] error:", error);
 
@@ -128,21 +105,13 @@ export async function DELETE(
         if (mapped) return mapped;
 
         if (error instanceof AuthError) {
-            return NextResponse.json(
-                {
-                    message: error.message,
-                    error: error.code,
-                },
-                { status: error.status },
-            );
+            return apiError(error.message, error.code, error.status);
         }
 
-        return NextResponse.json(
-            {
-                message: "Erreur lors de la suppression de l'indice.",
-                error: "INTERNAL_SERVER_ERROR",
-            },
-            { status: 500 },
+        return apiError(
+            "Erreur lors de la suppression de l'indice.",
+            "INTERNAL_SERVER_ERROR",
+            500,
         );
     }
 }

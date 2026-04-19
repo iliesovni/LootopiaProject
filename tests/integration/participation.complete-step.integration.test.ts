@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
-import { completeStep, ParticipationError, startParticipation, useClue } from "@/lib/services/participation.service";
+import { applyClue, completeStep, ParticipationError, startParticipation } from "@/lib/services/participation.service";
 import {
     ARMarkerType,
     Difficulty,
@@ -112,13 +112,13 @@ describe("integration - completeStep", () => {
 
         const firstStepId = hunt.steps[0].id;
 
-        await useClue({
+        await applyClue({
             participationId: participation.id,
             userId: player.id,
             stepId: firstStepId,
         });
 
-        await useClue({
+        await applyClue({
             participationId: participation.id,
             userId: player.id,
             stepId: firstStepId,
@@ -242,13 +242,13 @@ describe("integration - completeStep", () => {
 
         const firstStepId = hunt.steps[0].id;
 
-        await useClue({
+        await applyClue({
             participationId: participation.id,
             userId: player.id,
             stepId: firstStepId,
         });
 
-        await useClue({
+        await applyClue({
             participationId: participation.id,
             userId: player.id,
             stepId: firstStepId,

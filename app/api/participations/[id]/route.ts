@@ -1,7 +1,7 @@
+import { apiError, apiSuccess } from "@/lib/api/responses";
 import { AuthError } from "@/lib/auth/current-user";
 import { requireAuth } from "@/lib/auth/guards";
 import { getParticipationById, mapParticipationError } from "@/lib/services/participation.service";
-import { NextResponse } from "next/server";
 
 export async function GET(
     _request: Request,
@@ -16,10 +16,10 @@ export async function GET(
             userId: currentUser.id,
         });
 
-        return NextResponse.json({
-            message: "Participation récupérée avec succès.",
-            data: participation,
-        });
+        return apiSuccess(
+            "Participation récupérée avec succès.",
+            participation,
+        );
     } catch (error) {
         console.error("[GET_PARTICIPATION_ERROR]", error);
 
@@ -27,21 +27,13 @@ export async function GET(
         if (mapped) return mapped;
 
         if (error instanceof AuthError) {
-            return NextResponse.json(
-                {
-                    message: error.message,
-                    error: error.code,
-                },
-                { status: error.status },
-            );
+            return apiError(error.message, error.code, error.status);
         }
 
-        return NextResponse.json(
-            {
-                message: "Erreur serveur.",
-                error: "INTERNAL_SERVER_ERROR",
-            },
-            { status: 500 },
+        return apiError(
+            "Erreur serveur.",
+            "INTERNAL_SERVER_ERROR",
+            500,
         );
     }
 }

@@ -1,7 +1,8 @@
+import { apiError, apiSuccess } from "@/lib/api/responses";
 import { AuthError } from "@/lib/auth/current-user";
 import { requireAuth } from "@/lib/auth/guards";
 import { finishParticipation, mapParticipationError } from "@/lib/services/participation.service";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
 export async function POST(
     _request: NextRequest,
@@ -16,19 +17,13 @@ export async function POST(
             userId: user.id,
         });
 
-        return NextResponse.json({
-            message: "Participation terminée avec succès.",
-            data: updatedParticipation,
-        });
+        return apiSuccess(
+            "Participation terminée avec succès.",
+            updatedParticipation,
+        );
     } catch (error) {
         if (error instanceof AuthError) {
-            return NextResponse.json(
-                {
-                    message: error.message,
-                    error: error.code,
-                },
-                { status: error.status },
-            );
+            return apiError(error.message, error.code, error.status);
         }
 
         const mappedError = mapParticipationError(error);
@@ -38,12 +33,10 @@ export async function POST(
 
         console.error("[FINISH_PARTICIPATION_ERROR]", error);
 
-        return NextResponse.json(
-            {
-                message: "Erreur serveur.",
-                error: "INTERNAL_SERVER_ERROR",
-            },
-            { status: 500 },
+        return apiError(
+            "Erreur serveur.",
+            "INTERNAL_SERVER_ERROR",
+            500,
         );
     }
 }
