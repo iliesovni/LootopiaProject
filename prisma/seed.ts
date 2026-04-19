@@ -1,15 +1,16 @@
 import "dotenv/config";
+import { PrismaPg } from "@prisma/adapter-pg";
 import {
     ARMarkerType,
     Difficulty,
     HuntMode,
+    HuntStatus,
+    HuntVisibility,
     ParticipationStatus,
     PrismaClient,
     Role,
 } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcrypt";
-import { randomUUID } from "crypto";
 
 const adapter = new PrismaPg({
     connectionString: process.env.DATABASE_URL!,
@@ -17,7 +18,8 @@ const adapter = new PrismaPg({
 
 const prisma = new PrismaClient({ adapter });
 
-const IDS = {
+export const IDS = {
+    adminId: "00000000-0000-4000-8000-000000000001",
     partnerUserId: "11111111-1111-4111-8111-111111111111",
     partnerId: "22222222-2222-4222-8222-222222222222",
     player1Id: "33333333-3333-4333-8333-333333333333",
@@ -27,7 +29,7 @@ const IDS = {
     mainHuntId: "66666666-6666-4666-8666-666666666666",
     startHuntId: "77777777-7777-4777-8777-777777777777",
     finishHuntId: "88888888-8888-4888-8888-888888888888",
-    completedHuntId: "99999999-9999-4999-8999-999999999999",
+    privateHuntId: "99999999-9999-4999-8999-999999999999",
 
     mainStep1Id: "aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
     mainStep2Id: "aaaaaaa2-aaaa-4aaa-8aaa-aaaaaaaaaaa2",
@@ -35,8 +37,8 @@ const IDS = {
     startStep2Id: "bbbbbbb2-bbbb-4bbb-8bbb-bbbbbbbbbbb2",
     finishStep1Id: "ccccccc1-cccc-4ccc-8ccc-ccccccccccc1",
     finishStep2Id: "ccccccc2-cccc-4ccc-8ccc-ccccccccccc2",
-    completedStep1Id: "ddddddd1-dddd-4ddd-8ddd-ddddddddddd1",
-    completedStep2Id: "ddddddd2-dddd-4ddd-8ddd-ddddddddddd2",
+    privateStep1Id: "ddddddd1-dddd-4ddd-8ddd-ddddddddddd1",
+    privateStep2Id: "ddddddd2-dddd-4ddd-8ddd-ddddddddddd2",
 
     mainClue1Id: "eeeeeee1-eeee-4eee-8eee-eeeeeeeeeee1",
     mainClue2Id: "eeeeeee2-eeee-4eee-8eee-eeeeeeeeeee2",
@@ -46,20 +48,22 @@ const IDS = {
     startClue2Id: "fffffff2-ffff-4fff-8fff-fffffffffff2",
     finishClue1Id: "12121212-1212-4212-8212-121212121211",
     finishClue2Id: "12121212-1212-4212-8212-121212121212",
-    completedClue1Id: "13131313-1313-4313-8313-131313131311",
-    completedClue2Id: "13131313-1313-4313-8313-131313131312",
+    privateClue1Id: "13131313-1313-4313-8313-131313131311",
+    privateClue2Id: "13131313-1313-4313-8313-131313131312",
 
     mainParticipationId: "14141414-1414-4414-8414-141414141414",
     finishParticipationId: "15151515-1515-4515-8515-151515151515",
-    completedParticipationId: "16161616-1616-4616-8616-161616161616",
+    privateCompletedParticipationId: "16161616-1616-4616-8616-161616161616",
 
     mainProgress1Id: "17171717-1717-4717-8717-171717171711",
     mainProgress2Id: "17171717-1717-4717-8717-171717171712",
     finishProgress1Id: "18181818-1818-4818-8818-181818181811",
     finishProgress2Id: "18181818-1818-4818-8818-181818181812",
-    completedProgress1Id: "19191919-1919-4919-8919-191919191911",
-    completedProgress2Id: "19191919-1919-4919-8919-191919191912",
-};
+    privateCompletedProgress1Id: "19191919-1919-4919-8919-191919191911",
+    privateCompletedProgress2Id: "19191919-1919-4919-8919-191919191912",
+
+    privateAccessAttemptId: "20202020-2020-4020-8020-202020202020",
+} as const;
 
 async function main() {
     console.log("🌱 Starting deterministic seed...");
@@ -71,10 +75,21 @@ async function main() {
     await prisma.participation.deleteMany();
     await prisma.clue.deleteMany();
     await prisma.step.deleteMany();
+    await prisma.huntAccessAttempt.deleteMany();
     await prisma.hunt.deleteMany();
     await prisma.userStats.deleteMany();
     await prisma.partner.deleteMany();
     await prisma.user.deleteMany();
+
+    await prisma.user.create({
+        data: {
+            id: IDS.adminId,
+            email: "admin@lootopia.local",
+            username: "admin_fixed",
+            passwordHash,
+            role: Role.ADMIN,
+        },
+    });
 
     await prisma.user.create({
         data: {
@@ -94,71 +109,62 @@ async function main() {
         },
     });
 
-    await prisma.user.create({
-        data: {
+    for (const player of [
+        {
             id: IDS.player1Id,
             email: "player1@lootopia.local",
             username: "player_one",
-            passwordHash,
-            role: Role.PLAYER,
-        },
-    });
-
-    await prisma.userStats.create({
-        data: {
-            userId: IDS.player1Id,
             totalPoints: 120,
             huntsCompleted: 1,
             level: 2,
         },
-    });
-
-    await prisma.user.create({
-        data: {
+        {
             id: IDS.player2Id,
             email: "player2@lootopia.local",
             username: "player_two",
-            passwordHash,
-            role: Role.PLAYER,
+            totalPoints: 75,
+            huntsCompleted: 1,
+            level: 2,
         },
-    });
-
-    await prisma.userStats.create({
-        data: {
-            userId: IDS.player2Id,
-            totalPoints: 40,
-            huntsCompleted: 0,
-            level: 1,
-        },
-    });
-
-    await prisma.user.create({
-        data: {
+        {
             id: IDS.player3Id,
             email: "player3@lootopia.local",
             username: "player_three",
-            passwordHash,
-            role: Role.PLAYER,
-        },
-    });
-
-    await prisma.userStats.create({
-        data: {
-            userId: IDS.player3Id,
-            totalPoints: 200,
-            huntsCompleted: 2,
+            totalPoints: 180,
+            huntsCompleted: 1,
             level: 3,
         },
-    });
+    ]) {
+        await prisma.user.create({
+            data: {
+                id: player.id,
+                email: player.email,
+                username: player.username,
+                passwordHash,
+                role: Role.PLAYER,
+            },
+        });
+
+        await prisma.userStats.create({
+            data: {
+                userId: player.id,
+                totalPoints: player.totalPoints,
+                huntsCompleted: player.huntsCompleted,
+                level: player.level,
+            },
+        });
+    }
 
     await prisma.hunt.create({
         data: {
             id: IDS.mainHuntId,
             title: "Le parcours du Vieux-Port",
-            description: "Chasse principale utilisée par requests.http pour les tests de step, clue et participation.",
+            description: "Chasse publique publiée avec deux étapes non commencées.",
             location: "Marseille",
             difficulty: Difficulty.MEDIUM,
-            isPublic: true,
+            visibility: HuntVisibility.PUBLIC,
+            status: HuntStatus.PUBLISHED,
+            isDeleted: false,
             startLat: 43.2965,
             startLng: 5.3698,
             createdById: IDS.partnerUserId,
@@ -231,10 +237,12 @@ async function main() {
         data: {
             id: IDS.startHuntId,
             title: "Balade du Panier",
-            description: "Chasse publique sans participation existante, utilisée pour POST /api/participations/start.",
+            description: "Chasse publique publiée sans participation existante.",
             location: "Marseille",
             difficulty: Difficulty.EASY,
-            isPublic: true,
+            visibility: HuntVisibility.PUBLIC,
+            status: HuntStatus.PUBLISHED,
+            isDeleted: false,
             startLat: 43.3009,
             startLng: 5.3675,
             createdById: IDS.player1Id,
@@ -290,10 +298,12 @@ async function main() {
         data: {
             id: IDS.finishHuntId,
             title: "Le parc Borély express",
-            description: "Chasse utilisée pour tester POST /api/participations/[id]/finish.",
+            description: "Chasse publique publiée avec une participation prête à être finalisée.",
             location: "Marseille",
             difficulty: Difficulty.EASY,
-            isPublic: true,
+            visibility: HuntVisibility.PUBLIC,
+            status: HuntStatus.PUBLISHED,
+            isDeleted: false,
             startLat: 43.2699,
             startLng: 5.3878,
             createdById: IDS.partnerUserId,
@@ -348,12 +358,15 @@ async function main() {
 
     await prisma.hunt.create({
         data: {
-            id: IDS.completedHuntId,
+            id: IDS.privateHuntId,
             title: "Le centre historique",
-            description: "Chasse déjà terminée, utile pour lecture et contrôle manuel.",
+            description: "Chasse privée publiée avec code d'accès et participation déjà terminée.",
             location: "Aix-en-Provence",
             difficulty: Difficulty.HARD,
-            isPublic: false,
+            visibility: HuntVisibility.PRIVATE,
+            status: HuntStatus.PUBLISHED,
+            accessCode: "12345678",
+            isDeleted: false,
             startLat: 43.5297,
             startLng: 5.4474,
             createdById: IDS.partnerUserId,
@@ -362,7 +375,7 @@ async function main() {
             steps: {
                 create: [
                     {
-                        id: IDS.completedStep1Id,
+                        id: IDS.privateStep1Id,
                         title: "La fontaine ancienne",
                         description: "Trouve la vieille fontaine de la place.",
                         latitude: 43.5299,
@@ -373,7 +386,7 @@ async function main() {
                         clues: {
                             create: [
                                 {
-                                    id: IDS.completedClue1Id,
+                                    id: IDS.privateClue1Id,
                                     content: "L'eau y coule depuis longtemps.",
                                     penaltyPoints: 6,
                                     orderIndex: 1,
@@ -382,7 +395,7 @@ async function main() {
                         },
                     },
                     {
-                        id: IDS.completedStep2Id,
+                        id: IDS.privateStep2Id,
                         title: "La ruelle cachée",
                         description: "Trouve la ruelle discrète près de la place.",
                         latitude: 43.5302,
@@ -395,7 +408,7 @@ async function main() {
                         clues: {
                             create: [
                                 {
-                                    id: IDS.completedClue2Id,
+                                    id: IDS.privateClue2Id,
                                     content: "Cherche un passage étroit et discret.",
                                     penaltyPoints: 8,
                                     orderIndex: 1,
@@ -468,25 +481,25 @@ async function main() {
 
     await prisma.participation.create({
         data: {
-            id: IDS.completedParticipationId,
+            id: IDS.privateCompletedParticipationId,
             userId: IDS.player3Id,
-            huntId: IDS.completedHuntId,
+            huntId: IDS.privateHuntId,
             status: ParticipationStatus.COMPLETED,
             totalScore: 180,
             completedAt: now,
             stepProgress: {
                 create: [
                     {
-                        id: IDS.completedProgress1Id,
-                        stepId: IDS.completedStep1Id,
+                        id: IDS.privateCompletedProgress1Id,
+                        stepId: IDS.privateStep1Id,
                         isCompleted: true,
                         cluesUsed: 0,
                         pointsEarned: 80,
                         completedAt: now,
                     },
                     {
-                        id: IDS.completedProgress2Id,
-                        stepId: IDS.completedStep2Id,
+                        id: IDS.privateCompletedProgress2Id,
+                        stepId: IDS.privateStep2Id,
                         isCompleted: true,
                         cluesUsed: 1,
                         pointsEarned: 100,
@@ -497,106 +510,38 @@ async function main() {
         },
     });
 
-    await prisma.hunt.create({
+    await prisma.huntAccessAttempt.create({
         data: {
-            id: randomUUID(),
-            title: "Demo aléatoire",
-            description: "Donnée additionnelle générée aléatoirement par le seed.",
-            location: "Nice",
-            difficulty: Difficulty.EASY,
-            isPublic: true,
-            startLat: 43.7102,
-            startLng: 7.2620,
-            createdById: IDS.player1Id,
-            mode: HuntMode.COMMUNITY,
-            steps: {
-                create: [
-                    {
-                        id: randomUUID(),
-                        title: "Point bonus",
-                        description: "Étape générée aléatoirement.",
-                        latitude: 43.7104,
-                        longitude: 7.2623,
-                        radiusMeters: 15,
-                        orderIndex: 1,
-                        pointsReward: 10,
-                        clues: {
-                            create: [
-                                {
-                                    id: randomUUID(),
-                                    content: "Indice bonus.",
-                                    penaltyPoints: 1,
-                                    orderIndex: 1,
-                                },
-                            ],
-                        },
-                    },
-                ],
-            },
-        },
-    });
-
-    await prisma.hunt.create({
-        data: {
-            id: randomUUID(),
-            title: "Demo aléatoire 2",
-            description: "Donnée additionnelle générée aléatoirement par le seed.",
-            location: "Troyes",
-            difficulty: Difficulty.MEDIUM,
-            isPublic: true,
-            startLat: 43.7102,
-            startLng: 7.2620,
-            createdById: IDS.player1Id,
-            mode: HuntMode.COMMUNITY,
-            steps: {
-                create: [
-                    {
-                        id: randomUUID(),
-                        title: "Point bonus",
-                        description: "Étape générée aléatoirement.",
-                        latitude: 43.7104,
-                        longitude: 7.2623,
-                        radiusMeters: 15,
-                        orderIndex: 1,
-                        pointsReward: 10,
-                        clues: {
-                            create: [
-                                {
-                                    id: randomUUID(),
-                                    content: "Indice bonus.",
-                                    penaltyPoints: 1,
-                                    orderIndex: 1,
-                                },
-                            ],
-                        },
-                    },
-                ],
-            },
+            id: IDS.privateAccessAttemptId,
+            userId: IDS.player2Id,
+            huntId: IDS.privateHuntId,
+            failedAttempts: 2,
         },
     });
 
     console.log("✅ Deterministic seed completed.");
     console.table({
+        adminId: IDS.adminId,
         partnerUserId: IDS.partnerUserId,
         partnerId: IDS.partnerId,
         player1Id: IDS.player1Id,
         player2Id: IDS.player2Id,
+        player3Id: IDS.player3Id,
         mainHuntId: IDS.mainHuntId,
         startHuntId: IDS.startHuntId,
         finishHuntId: IDS.finishHuntId,
-        mainStep1Id: IDS.mainStep1Id,
-        mainStep2Id: IDS.mainStep2Id,
-        mainClue1Id: IDS.mainClue1Id,
+        privateHuntId: IDS.privateHuntId,
         mainParticipationId: IDS.mainParticipationId,
         finishParticipationId: IDS.finishParticipationId,
+        privateCompletedParticipationId: IDS.privateCompletedParticipationId,
     });
 }
 
 main()
-    .catch((error) => {
-        console.error("❌ Seed failed:", error);
-        process.exit(1);
-    })
-    .finally(async () => {
-        await prisma.$disconnect();
-    });
+.catch((error) => {
+    console.error("❌ Seed failed:", error);
+    process.exit(1);
+})
+.finally(async () => {
+    await prisma.$disconnect();
+});

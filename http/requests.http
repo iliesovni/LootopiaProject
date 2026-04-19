@@ -48,7 +48,6 @@ Content-Type: application/json
   "description": "Une chasse de test créée via requests.http.",
   "location": "Marseille",
   "difficulty": "EASY",
-  "isPublic": true,
   "startLat": 43.2961,
   "startLng": 5.3612,
   "createdById": "{{partnerUserId}}"

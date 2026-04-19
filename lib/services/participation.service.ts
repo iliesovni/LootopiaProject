@@ -117,6 +117,26 @@ type ParticipationPublicView = {
     stepProgress: ParticipationPublicStepProgress[];
 };
 
+type ListMyParticipationsOptions = {
+    status?: ParticipationStatus;
+};
+
+export async function getMyParticipations(
+    currentUserId: string,
+    options?: ListMyParticipationsOptions,
+) {
+    return prisma.participation.findMany({
+        where: {
+            userId: currentUserId,
+            ...(options?.status ? { status: options.status } : {}),
+        },
+        select: participationPublicSelect,
+        orderBy: {
+            startedAt: "desc",
+        },
+    });
+}
+
 export function getTargetStepProgress(
     participation: ParticipationWithProgress,
     stepId: string,

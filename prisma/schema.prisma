@@ -51,7 +51,6 @@ model Hunt {
   description String?
   location    String
   difficulty  Difficulty
-  isPublic    Boolean    @default(true)
 
   startLat Float
   startLng Float
