@@ -1,55 +1,65 @@
 "use client";
-
 import { useEffect, useState } from 'react'
-
 import Map from '../../components/Map'
 
-type Position = {
-  lat: number
-  lng: number
+type Position = { lat: number; lng: number }
+
+function isValidCoord(lat: number, lng: number) {
+  return (
+    Number.isFinite(lat) && Number.isFinite(lng) &&
+    lat >= -90 && lat <= 90 &&
+    lng >= -180 && lng <= 180
+  )
 }
 
-const DEFAULT_POSITION: Position = { lat: 48.8566, lng: 2.3522 } // Paris par défaut
-
 export default function TestMapPage() {
-  // Important: on évite de monter/démonter MapContainer à chaque changement de position.
-  // Sinon Leaflet peut conserver un état sur le conteneur et provoquer "already initialized".
   const [position, setPosition] = useState<Position | null>(null)
-  const [isMounted, setIsMounted] = useState(false)
-  const [center, setCenter] = useState<[number, number]>([DEFAULT_POSITION.lat, DEFAULT_POSITION.lng])
+  const [isReady, setIsReady] = useState(false)
 
   useEffect(() => {
-    setIsMounted(true)
-
     if (!navigator.geolocation) {
-      console.error('Geolocation API not available')
+      // Pas de géoloc dispo → on affiche quand même la carte sur Paris
+      setIsReady(true)
       return
     }
 
+    // 1. Fix rapide : on attend la VRAIE position avant de monter la carte
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords
+        if (isValidCoord(lat, lng)) {
+          setPosition({ lat, lng })
+        }
+        setIsReady(true) // La carte se monte SEULEMENT ici
+      },
+      (err) => {
+        console.error('getCurrentPosition failed:', err)
+        setIsReady(true) // En cas d'erreur, on affiche quand même
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    )
+
+    // 2. Suivi continu pour les mises à jour suivantes
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        const lat = pos.coords.latitude
-        const lng = pos.coords.longitude
-
-        // Garde-fou: Leaflet plante si on lui passe NaN ou des valeurs hors bornes.
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
-        if (lat < -90 || lat > 90) return
-        if (lng < -180 || lng > 180) return
-
-        const next = { lat, lng }
-        setPosition(next)
-        setCenter([lat, lng])
+        const { latitude: lat, longitude: lng } = pos.coords
+        if (isValidCoord(lat, lng)) {
+          setPosition({ lat, lng })
+        }
       },
-      (err) => console.error(err),
+      (err) => console.error('watchPosition error:', err),
       { enableHighAccuracy: true }
     )
 
-    return () => {
-      navigator.geolocation.clearWatch(watchId)
-    }
+    return () => navigator.geolocation.clearWatch(watchId)
   }, [])
 
-  if (!isMounted) return <p>Chargement...</p>
+  if (!isReady) return <p>Localisation en cours…</p>
+
+  const DEFAULT: [number, number] = [48.8566, 2.3522]
+  const center: [number, number] = position
+    ? [position.lat, position.lng]
+    : DEFAULT
 
   return (
     <Map
