@@ -1,6 +1,6 @@
 'use client'
 import dynamic from 'next/dynamic'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import 'leaflet/dist/leaflet.css'
 
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
@@ -10,7 +10,7 @@ import type { LatLngExpression, LatLngTuple } from 'leaflet'
 
 export interface Destination {
   position: LatLngTuple
-  radius: number // en mètres
+  radius: number
 }
 
 export interface MapProps {
@@ -22,7 +22,6 @@ export interface MapProps {
   onDestinationReached?: () => void
 }
 
-// Calcul de distance Haversine entre deux points (en mètres)
 function haversineDistance(a: LatLngTuple, b: LatLngTuple): number {
   const R = 6371000
   const toRad = (deg: number) => (deg * Math.PI) / 180
@@ -36,16 +35,54 @@ function haversineDistance(a: LatLngTuple, b: LatLngTuple): number {
   return R * 2 * Math.atan2(Math.sqrt(aq), Math.sqrt(1 - aq))
 }
 
+function lerp(a: number, b: number, t: number) {
+  return a + (b - a) * t
+}
+
+const LERP_FACTOR = 0.12      // 0.0 = jamais bouge, 1.0 = instantané
+const MIN_MOVE_METERS = 0.5   // ignore les tremblements GPS en dessous de 0.5m
+
 const LeafletMapView = dynamic(
   async () => {
     const mod = await import('react-leaflet')
     const { MapContainer, TileLayer, Marker, Circle, useMap } = mod
 
-    function RecenterMap({ center }: { center: LatLngExpression }) {
+    // Composant qui gère le suivi fluide de la carte
+    function SmoothFollow({ targetRef }: { targetRef: React.RefObject<LatLngTuple | null> }) {
       const map = useMap()
+      const currentRef = useRef<LatLngTuple | null>(null)
+      const rafRef = useRef<number>(0)
+
       useEffect(() => {
-        map.setView(center)
-      }, [center, map])
+        function tick() {
+          const target = targetRef.current
+          if (target) {
+            if (!currentRef.current) {
+              // Premier point : centrage immédiat sans animation
+              currentRef.current = target
+              map.setView(target, map.getZoom(), { animate: false })
+            } else {
+              const [curLat, curLng] = currentRef.current
+              const [tgtLat, tgtLng] = target
+              const newLat = lerp(curLat, tgtLat, LERP_FACTOR)
+              const newLng = lerp(curLng, tgtLng, LERP_FACTOR)
+              const next: LatLngTuple = [newLat, newLng]
+
+              // Ne pan que si le mouvement interpolé est perceptible
+              const dist = haversineDistance(currentRef.current, next)
+              if (dist > 0.01) {
+                currentRef.current = next
+                map.panTo(next, { animate: true, duration: 0.1, easeLinearity: 1 })
+              }
+            }
+          }
+          rafRef.current = requestAnimationFrame(tick)
+        }
+
+        rafRef.current = requestAnimationFrame(tick)
+        return () => cancelAnimationFrame(rafRef.current)
+      }, [map, targetRef])
+
       return null
     }
 
@@ -56,23 +93,32 @@ const LeafletMapView = dynamic(
       markerPosition?: LatLngExpression | null
       iconsReady: boolean
       destination?: Destination | null
+      smoothTargetRef: React.RefObject<LatLngTuple | null>
     }) {
-      const { center, zoom, height, markerPosition, iconsReady, destination } = props
+      const { center, zoom, height, markerPosition, iconsReady, destination, smoothTargetRef } = props
 
       return (
-        <MapContainer center={center} zoom={zoom} style={{ height, width: '100%' }}>
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          <RecenterMap center={center} />
+        <MapContainer
+          center={center}
+          zoom={zoom}
+          style={{ height, width: '100%' }}
+          zoomControl={true}
+        >
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            keepBuffer={4}         // garde plus de tuiles en mémoire → moins de blanc
+            updateWhenIdle={false} // rafraîchit les tuiles en continu
+            updateWhenZooming={false}
+          />
 
-          {/* Marker de l'utilisateur */}
+          <SmoothFollow targetRef={smoothTargetRef} />
+
           {markerPosition && iconsReady && (
             <Marker position={markerPosition} />
           )}
 
-          {/* Zone de destination */}
           {destination && (
             <>
-              {/* Cercle de la zone */}
               <Circle
                 center={destination.position}
                 radius={destination.radius}
@@ -84,13 +130,7 @@ const LeafletMapView = dynamic(
                   dashArray: '6 4',
                 }}
               />
-              {/* Marker de la destination */}
-              {iconsReady && (
-                <Marker
-                  position={destination.position}
-                  opacity={0.85}
-                />
-              )}
+              {iconsReady && <Marker position={destination.position} opacity={0.85} />}
             </>
           )}
         </MapContainer>
@@ -109,23 +149,41 @@ export default function Map({
   onDestinationReached,
 }: MapProps) {
   const [iconsReady, setIconsReady] = useState(false)
-  const wasInsideRef = useState(false)
+  const wasInsideRef = useRef(false)
 
-  // Détection d'entrée dans la zone
+  // Ref partagée avec SmoothFollow — mise à jour sans re-render
+  const smoothTargetRef = useRef<LatLngTuple | null>(null)
+  const lastAcceptedRef = useRef<LatLngTuple | null>(null)
+
+  // Met à jour la cible lissée dès que markerPosition change
+  useEffect(() => {
+    if (!markerPosition) return
+    const pos = markerPosition as LatLngTuple
+
+    // Filtre le bruit GPS : ignore si mouvement < MIN_MOVE_METERS
+    if (lastAcceptedRef.current) {
+      const dist = haversineDistance(lastAcceptedRef.current, pos)
+      if (dist < MIN_MOVE_METERS) return
+    }
+
+    lastAcceptedRef.current = pos
+    smoothTargetRef.current = pos
+  }, [markerPosition])
+
+  // Détection entrée dans la zone destination
   useEffect(() => {
     if (!destination || !markerPosition) return
     const userPos = markerPosition as LatLngTuple
     const dist = haversineDistance(userPos, destination.position)
     const isInside = dist <= destination.radius
 
-    if (isInside && !wasInsideRef[0]) {
+    if (isInside && !wasInsideRef.current) {
       console.log(`✅ Destination atteinte ! Distance : ${Math.round(dist)}m, rayon : ${destination.radius}m`)
       onDestinationReached?.()
     }
-    wasInsideRef[0] = isInside
+    wasInsideRef.current = isInside
   }, [markerPosition, destination, onDestinationReached])
 
-  // Init icônes Leaflet
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -151,6 +209,7 @@ export default function Map({
       markerPosition={markerPosition}
       iconsReady={iconsReady}
       destination={destination}
+      smoothTargetRef={smoothTargetRef}
     />
   )
 }

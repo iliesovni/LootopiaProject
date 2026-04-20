@@ -13,7 +13,7 @@ function isValidCoord(lat: number, lng: number) {
 
 // 🎯 Configurez votre destination ici
 const DESTINATION: Destination = {
-  position: [48.8584, 2.2945], // Tour Eiffel
+  position: [48.990582, 1.680819], // Tour Eiffel
   radius: 200,                  // 200 mètres
 }
 
@@ -29,6 +29,7 @@ export default function TestMapPage() {
         const { latitude: lat, longitude: lng } = pos.coords
         if (isValidCoord(lat, lng)) setPosition({ lat, lng })
         setIsReady(true)
+        console.log('Position:', { lat, lng })
       },
       (err) => { console.error(err); setIsReady(true) },
       { enableHighAccuracy: true, timeout: 8000 }
