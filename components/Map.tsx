@@ -10,6 +10,7 @@ import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 import type { LatLngExpression, LatLngTuple } from 'leaflet'
 
 export interface Destination {
+  id?: string | number
   position: LatLngTuple
   radius: number
   label?: string
@@ -146,7 +147,7 @@ const LeafletMapView = dynamic(
           <SmoothFollow targetRef={smoothTargetRef} />
           {markerPosition && iconsReady && <Marker position={markerPosition} />}
           {destinations?.map((dest, i) => (
-            <React.Fragment key={i}>
+            <React.Fragment key={dest.id ?? i}>
               <Circle
                 center={dest.position}
                 radius={dest.radius}
@@ -203,10 +204,10 @@ export default function Map({
       const wasInside = wasInsideRef.current[i] ?? false
 
       if (isInside && !wasInside) {
-        console.log(`✅ Destination ${i} atteinte !`)
+        console.log(`Destination ${i} atteinte`)
         onDestinationReached?.(dest, i)
       } else if (!isInside && wasInside) {
-        console.log(`👋 Destination ${i} quittée !`)
+        console.log(`Destination ${i} quittée`)
         onDestinationLeft?.(dest, i)
       }
       wasInsideRef.current[i] = isInside
