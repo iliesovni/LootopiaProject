@@ -14,6 +14,11 @@ export interface Destination {
   radius: number
   label?: string
   description?: string
+  action?: {
+    label: string
+    url?: string
+    onClick?: () => void
+  }
 }
 
 export interface MapProps {
@@ -198,10 +203,10 @@ export default function Map({
       const wasInside = wasInsideRef.current[i] ?? false
 
       if (isInside && !wasInside) {
-        console.log(`Destination ${i} atteinte !`)
+        console.log(`✅ Destination ${i} atteinte !`)
         onDestinationReached?.(dest, i)
       } else if (!isInside && wasInside) {
-        console.log(`Destination ${i} quittée !`)
+        console.log(`👋 Destination ${i} quittée !`)
         onDestinationLeft?.(dest, i)
       }
       wasInsideRef.current[i] = isInside

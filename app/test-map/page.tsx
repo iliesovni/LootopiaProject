@@ -11,11 +11,33 @@ function isValidCoord(lat: number, lng: number) {
   )
 }
 
+function redirectToHome() {
+  window.location.href = 'http://localhost:3000/'
+}
+
 //utiliser cette liste afin de mettre en place les points sur la map. cela passe la latitude et la longitude pour chaque point. https://www.gps-coordinates.net/.
+//le bouton est utilisable aussi bien pour des url que pour appeler des fonctions.
 const DESTINATIONS: Destination[] = [
-  { position: [48.98770993680927, 1.6861476692966049], radius: 200, label: 'Centre', description: 'Va travailler' },
-  { position: [48.99064614114862, 1.6810830313727587], radius: 150, label: 'Basic Frites', description: 'Misère c est les jambes ajourd hui'  },
-  { position: [48.989324992860325, 1.6759300478983574], radius: 100, label: 'Kawasaki', description: 'Y a des motos un peu'  },
+  {
+    position: [48.98770993680927, 1.6861476692966049],
+    radius: 200,
+    label: 'Centre',
+    description: 'Va travailler',
+    action: { label: 'Ouvrir la destination', url: 'https://www.openstreetmap.org' },
+  },
+  { position: [48.99064614114862, 1.6810830313727587],
+    radius: 150,
+    label: 'Basic Frites',
+    description: 'Misère c est les jambes ajourd hui',
+    action: { label: 'Ouvrir la destination', url: 'https://www.openstreetmap.org' },
+    },
+  {
+    position: [48.989324992860325, 1.6759300478983574],
+    radius: 100,
+    label: 'Kawasaki',
+    description: 'Y a des motos un peu',
+    action: { label: 'Aller a l accueil', onClick: redirectToHome },
+  },
 ]
 
 export default function TestMapPage() {
@@ -23,6 +45,18 @@ export default function TestMapPage() {
   const [isReady, setIsReady] = useState(false)
   const [activeDestination, setActiveDestination] = useState<Destination | null>(null)
   const [popupVisible, setPopupVisible] = useState(false)
+
+  const handleDestinationAction = (destination: Destination) => {
+    const action = destination.action
+    if (!action) return
+    if (action.onClick) {
+      action.onClick()
+      return
+    }
+    if (action.url) {
+      window.open(action.url, '_blank', 'noopener,noreferrer')
+    }
+  }
 
   useEffect(() => {
     if (!navigator.geolocation) { setIsReady(true); return }
@@ -132,6 +166,25 @@ export default function TestMapPage() {
           <p style={{ margin: 0, color: '#444', fontSize: '0.95rem' }}>
             {activeDestination.description}
           </p>
+          {activeDestination.action && (
+            <button
+              onClick={() => handleDestinationAction(activeDestination)}
+              style={{
+                marginTop: '0.9rem',
+                width: '100%',
+                background: '#2563eb',
+                color: 'white',
+                border: 'none',
+                borderRadius: '0.7rem',
+                padding: '0.65rem 0.9rem',
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              {activeDestination.action.label}
+            </button>
+          )}
         </div>
       )}
     </div>
