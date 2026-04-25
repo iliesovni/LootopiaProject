@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import {
+    abandonParticipation,
     applyClue,
     completeStep,
     finishParticipation,
@@ -897,5 +898,82 @@ describe("participation.service - finishParticipation", () => {
         ).rejects.toThrow(
             new ParticipationError("PARTICIPATION_HAS_REMAINING_STEPS"),
         );
+    });
+});
+
+describe("participation.service - abandonParticipation", () => {
+    it("should mark participation as abandoned when it is in progress", async () => {
+        getParticipationFindUniqueMock().mockResolvedValue(
+            makeParticipation({
+                status: ParticipationStatus.IN_PROGRESS,
+            }),
+        );
+
+        getParticipationUpdateMock().mockResolvedValue(
+            makeParticipation({
+                status: ParticipationStatus.ABANDONED,
+            }),
+        );
+
+        const result = await abandonParticipation({
+            participationId: "participation-1",
+            userId: "user-1",
+        });
+
+        expect(getParticipationUpdateMock()).toHaveBeenCalledWith({
+            where: { id: "participation-1" },
+            data: {
+                status: ParticipationStatus.ABANDONED,
+            },
+            select: expect.anything(),
+        });
+
+        expect(result).toMatchObject({
+            id: "participation-1",
+            status: ParticipationStatus.ABANDONED,
+        });
+
+        expect(result.currentStep).toBeNull();
+    });
+
+    it("should throw if participation is not found", async () => {
+        getParticipationFindUniqueMock().mockResolvedValue(null);
+
+        await expect(
+            abandonParticipation({
+                participationId: "participation-1",
+                userId: "user-1",
+            }),
+        ).rejects.toThrow(new ParticipationError("PARTICIPATION_NOT_FOUND"));
+    });
+
+    it("should throw if participation does not belong to the user", async () => {
+        getParticipationFindUniqueMock().mockResolvedValue(
+            makeParticipation({
+                userId: "other-user",
+            }),
+        );
+
+        await expect(
+            abandonParticipation({
+                participationId: "participation-1",
+                userId: "user-1",
+            }),
+        ).rejects.toThrow(new ParticipationError("PARTICIPATION_FORBIDDEN"));
+    });
+
+    it("should throw if participation is not in progress", async () => {
+        getParticipationFindUniqueMock().mockResolvedValue(
+            makeParticipation({
+                status: ParticipationStatus.COMPLETED,
+            }),
+        );
+
+        await expect(
+            abandonParticipation({
+                participationId: "participation-1",
+                userId: "user-1",
+            }),
+        ).rejects.toThrow(new ParticipationError("PARTICIPATION_NOT_IN_PROGRESS"));
     });
 });
