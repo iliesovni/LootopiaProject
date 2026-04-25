@@ -85,6 +85,11 @@ type GetParticipationInput = {
     userId: string;
 };
 
+type AbandonParticipationInput = {
+    participationId: string;
+    userId: string;
+};
+
 type ParticipationPublicStepProgress = {
     stepId: string;
     isCompleted: boolean;
@@ -516,6 +521,38 @@ export async function finishParticipation({ participationId, userId }: FinishPar
         data: {
             status: ParticipationStatus.COMPLETED,
             completedAt: new Date(),
+        },
+        select: participationPublicSelect,
+    });
+
+    return buildParticipationGameplayView(updatedParticipation);
+}
+
+export async function abandonParticipation({
+                                               participationId,
+                                               userId,
+                                           }: AbandonParticipationInput) {
+    const participation = await prisma.participation.findUnique({
+        where: { id: participationId },
+        select: participationPublicSelect,
+    });
+
+    if (!participation) {
+        throw new ParticipationError("PARTICIPATION_NOT_FOUND");
+    }
+
+    if (participation.userId !== userId) {
+        throw new ParticipationError("PARTICIPATION_FORBIDDEN");
+    }
+
+    if (participation.status !== ParticipationStatus.IN_PROGRESS) {
+        throw new ParticipationError("PARTICIPATION_NOT_IN_PROGRESS");
+    }
+
+    const updatedParticipation = await prisma.participation.update({
+        where: { id: participationId },
+        data: {
+            status: ParticipationStatus.ABANDONED,
         },
         select: participationPublicSelect,
     });
