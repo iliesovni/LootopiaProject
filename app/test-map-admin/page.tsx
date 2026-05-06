@@ -5,15 +5,18 @@ import type { LatLngTuple } from 'leaflet'
 import type { z } from 'zod'
 import AdminStepMapPicker from '@/components/AdminStepMapPicker'
 import { createStepSchema } from '@/schemas/step'
+import { createClueSchema } from '@/schemas/clue'
 
 type StepItem = z.infer<typeof createStepSchema>
+type ClueItem = z.infer<typeof createClueSchema>
 type ARMarkerType = Exclude<StepItem['arMarkerType'], null>
+type LocalStepItem = StepItem & { id: string; clues: ClueItem[] }
 
 const DEFAULT_CENTER: LatLngTuple = [48.98770993680927, 1.6861476692966049]
 
 export default function TestMapAdminPage() {
   const [selectedPosition, setSelectedPosition] = useState<LatLngTuple | null>(null)
-  const [steps, setSteps] = useState<StepItem[]>([])
+  const [steps, setSteps] = useState<LocalStepItem[]>([])
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [radiusMeters, setRadiusMeters] = useState(100)
@@ -23,6 +26,7 @@ export default function TestMapAdminPage() {
   const [arAssetUrl, setArAssetUrl] = useState('')
   const [huntId, setHuntId] = useState('')
   const [formError, setFormError] = useState('')
+  const [clueDrafts, setClueDrafts] = useState<Record<string, { content: string; penaltyPoints: number; orderIndex: number }>>({})
 
   const nextOrderIndex = useMemo(() => steps.length + 1, [steps.length])
 
@@ -55,7 +59,16 @@ export default function TestMapAdminPage() {
       return
     }
 
-    setSteps((current) => [...current, validationResult.data])
+    const localStepId = crypto.randomUUID()
+    setSteps((current) => [...current, { ...validationResult.data, id: localStepId, clues: [] }])
+    setClueDrafts((current) => ({
+      ...current,
+      [localStepId]: {
+        content: '',
+        penaltyPoints: 0,
+        orderIndex: 0,
+      },
+    }))
     setTitle('')
     setDescription('')
     setRadiusMeters(100)
@@ -64,6 +77,56 @@ export default function TestMapAdminPage() {
     setArMarkerType('')
     setArAssetUrl('')
     setSelectedPosition(null)
+  }
+
+  function handleClueDraftChange(stepId: string, key: 'content' | 'penaltyPoints' | 'orderIndex', value: string | number) {
+    setClueDrafts((current) => ({
+      ...current,
+      [stepId]: {
+        content: current[stepId]?.content ?? '',
+        penaltyPoints: current[stepId]?.penaltyPoints ?? 0,
+        orderIndex: current[stepId]?.orderIndex ?? 0,
+        [key]: value,
+      },
+    }))
+  }
+
+  function handleAddClue(stepId: string) {
+    setFormError('')
+
+    const draft = clueDrafts[stepId] ?? { content: '', penaltyPoints: 0, orderIndex: 0 }
+    const clueCandidate = {
+      content: draft.content.trim(),
+      penaltyPoints: Number(draft.penaltyPoints),
+      stepId,
+      orderIndex: Number(draft.orderIndex),
+    }
+
+    const validationResult = createClueSchema.safeParse(clueCandidate)
+    if (!validationResult.success) {
+      setFormError(validationResult.error.issues[0]?.message ?? "Erreur de validation de l'indice.")
+      return
+    }
+
+    setSteps((current) =>
+      current.map((step) =>
+        step.id === stepId
+          ? {
+              ...step,
+              clues: [...step.clues, validationResult.data],
+            }
+          : step
+      )
+    )
+
+    setClueDrafts((current) => ({
+      ...current,
+      [stepId]: {
+        content: '',
+        penaltyPoints: 0,
+        orderIndex: (current[stepId]?.orderIndex ?? 0) + 1,
+      },
+    }))
   }
 
   return (
@@ -182,7 +245,7 @@ export default function TestMapAdminPage() {
           <div style={{ display: 'grid', gap: '0.75rem' }}>
             {steps.map((step) => (
               <article
-                key={`${step.huntId}-${step.orderIndex}-${step.latitude}-${step.longitude}`}
+                key={step.id}
                 style={{
                   border: '1px solid #e5e7eb',
                   borderRadius: '10px',
@@ -200,6 +263,65 @@ export default function TestMapAdminPage() {
                   arMarkerType: {step.arMarkerType || 'null'} | arAssetUrl: {step.arAssetUrl || 'null'} | huntId:{' '}
                   {step.huntId || 'non défini'}
                 </p>
+                <p style={{ margin: '0.3rem 0 0', fontSize: '0.88rem', color: '#6b7280' }}>stepId local (UUID): {step.id}</p>
+
+                <div
+                  style={{
+                    marginTop: '0.8rem',
+                    paddingTop: '0.8rem',
+                    borderTop: '1px solid #e5e7eb',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                    gap: '0.6rem',
+                  }}
+                >
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', gridColumn: '1 / -1' }}>
+                    <span>Clue content</span>
+                    <input
+                      value={clueDrafts[step.id]?.content ?? ''}
+                      onChange={(event) => handleClueDraftChange(step.id, 'content', event.target.value)}
+                      placeholder="Texte de l'indice"
+                    />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                    <span>Penalty points</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={clueDrafts[step.id]?.penaltyPoints ?? 0}
+                      onChange={(event) => handleClueDraftChange(step.id, 'penaltyPoints', Number(event.target.value))}
+                    />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                    <span>Order index</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={clueDrafts[step.id]?.orderIndex ?? 0}
+                      onChange={(event) => handleClueDraftChange(step.id, 'orderIndex', Number(event.target.value))}
+                    />
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                    <button type="button" onClick={() => handleAddClue(step.id)}>
+                      Ajouter un clue
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '0.6rem' }}>
+                  <strong style={{ fontSize: '0.92rem' }}>Clues ({step.clues.length})</strong>
+                  {step.clues.length === 0 ? (
+                    <p style={{ margin: '0.35rem 0 0', color: '#6b7280', fontSize: '0.88rem' }}>Aucun clue sur ce step.</p>
+                  ) : (
+                    <ul style={{ margin: '0.35rem 0 0', paddingLeft: '1.2rem' }}>
+                      {step.clues.map((clue) => (
+                        <li key={`${clue.stepId}-${clue.orderIndex ?? 0}-${clue.content}`}>
+                          {clue.content} | penalty: {clue.penaltyPoints} | order: {clue.orderIndex ?? 'null'}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </article>
             ))}
           </div>
