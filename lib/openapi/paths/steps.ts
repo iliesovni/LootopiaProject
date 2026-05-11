@@ -9,7 +9,10 @@ import {
     ValidationErrorResponseSchema,
 } from "@/lib/openapi/components";
 import { registry } from "@/lib/openapi/registry";
+import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
+
+extendZodWithOpenApi(z);
 
 const huntIdParam = z.object({
     id: z.uuid().openapi({

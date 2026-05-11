@@ -12,7 +12,10 @@ import {
     ParticipationStatus,
     Role,
 } from "@prisma/client";
+import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
+
+extendZodWithOpenApi(z);
 
 export const MessageOnlyResponseSchema = z
 .object({

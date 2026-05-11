@@ -1,5 +1,8 @@
 import { Difficulty, HuntVisibility } from "@prisma/client";
+import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
+
+extendZodWithOpenApi(z);
 
 export const createHuntSchema = z
 .object({

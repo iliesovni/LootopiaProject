@@ -1,4 +1,7 @@
+import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
+
+extendZodWithOpenApi(z);
 
 export const createClueSchema = z.object({
     content: z.string().min(1, "Le contenu de l'indice est obligatoire."),
