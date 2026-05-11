@@ -267,10 +267,15 @@ export const apiClient = {
     }),
 
   // Hunts - Creator
-  listMyHunts: () =>
-    request<{ count: number; items: HuntOwnerDetail[] }>('/api/me/hunts', {
+  listMyHunts: async () => {
+    const hunts = await request<HuntOwnerDetail[]>('/api/me/hunts', {
       method: 'GET',
-    }),
+    })
+    return {
+      count: hunts?.length ?? 0,
+      items: hunts ?? [],
+    }
+  },
   createHunt: (input: CreateHuntInput) =>
     request<HuntOwnerDetail>('/api/hunts', {
       method: 'POST',
@@ -291,10 +296,15 @@ export const apiClient = {
     }),
 
   // Participations
-  listMyParticipations: () =>
-    request<{ count: number; items: ParticipationPublic[] }>('/api/me/participations', {
+  listMyParticipations: async () => {
+    const participations = await request<ParticipationPublic[]>('/api/me/participations', {
       method: 'GET',
-    }),
+    })
+    return {
+      count: participations?.length ?? 0,
+      items: participations ?? [],
+    }
+  },
   startParticipation: (input: StartParticipationInput) =>
     request<ParticipationPublic>('/api/participations/start', {
       method: 'POST',

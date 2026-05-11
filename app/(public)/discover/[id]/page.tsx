@@ -130,7 +130,7 @@ export default function HuntDetailPage() {
 
               <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <div className="rounded-lg border border-gray-200 bg-white p-4">
-                  <div className="mb-1 text-2xl">📍</div>
+                  <div className="mb-1 text-2xl"></div>
                   <p className="text-xs text-gray-600">Localisation</p>
                   <p className="text-sm font-semibold text-gray-900">
                     {hunt.location}
@@ -138,7 +138,7 @@ export default function HuntDetailPage() {
                 </div>
 
                 <div className="rounded-lg border border-gray-200 bg-white p-4">
-                  <div className="mb-1 text-2xl">🗺️</div>
+                  <div className="mb-1 text-2xl"></div>
                   <p className="text-xs text-gray-600">Étapes</p>
                   <p className="text-sm font-semibold text-gray-900">
                     {hunt._count.steps}
@@ -146,7 +146,7 @@ export default function HuntDetailPage() {
                 </div>
 
                 <div className="rounded-lg border border-gray-200 bg-white p-4">
-                  <div className="mb-1 text-2xl">👤</div>
+                  <div className="mb-1 text-2xl"></div>
                   <p className="text-xs text-gray-600">Créateur</p>
                   <p className="truncate text-sm font-semibold text-gray-900">
                     {hunt.createdBy.username}
@@ -154,7 +154,7 @@ export default function HuntDetailPage() {
                 </div>
 
                 <div className="rounded-lg border border-gray-200 bg-white p-4">
-                  <div className="mb-1 text-2xl">⭐</div>
+                  <div className="mb-1 text-2xl"></div>
                   <p className="text-xs text-gray-600">Défi</p>
                   <p className="text-sm font-semibold text-gray-900">
                     {hunt.difficulty}
@@ -250,7 +250,7 @@ export default function HuntDetailPage() {
                       >
                         {isJoining
                           ? 'Connexion en cours...'
-                          : '🎮 Rejoindre la chasse'}
+                          : 'Rejoindre la chasse'}
                       </button>
 
                       <p className="text-center text-xs text-gray-500">
