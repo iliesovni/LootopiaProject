@@ -1,4 +1,7 @@
+import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
+
+extendZodWithOpenApi(z);
 
 export const startParticipationSchema = z.object({
     huntId: z.uuid("L'identifiant de la chasse doit être un UUID valide."),

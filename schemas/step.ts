@@ -1,5 +1,8 @@
 import { ARMarkerType } from "@prisma/client";
+import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
+
+extendZodWithOpenApi(z);
 
 export const createStepSchema = z.object({
     title: z.string().min(3, "Le titre doit contenir au moins 3 caractères."),
