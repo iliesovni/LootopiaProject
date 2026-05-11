@@ -109,7 +109,7 @@ export default function CreatorHuntsPage() {
                               : 'bg-yellow-100 text-yellow-800'
                           }`}
                         >
-                          {hunt.status === HuntStatus.PUBLISHED ? '✅ Publiée' : '📝 Brouillon'}
+                          {hunt.status === HuntStatus.PUBLISHED ? 'Publiée' : 'Brouillon'}
                         </span>
                       </div>
 
@@ -117,19 +117,19 @@ export default function CreatorHuntsPage() {
 
                       <div className="grid grid-cols-2 gap-3 text-xs text-gray-600 sm:grid-cols-4">
                         <div className="flex items-center gap-2">
-                          <span>📍</span>
+                          <span></span>
                           <span className="truncate">{hunt.location}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span>⭐</span>
+                          <span></span>
                           <span>{hunt.difficulty}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span>🗺️</span>
+                          <span></span>
                           <span>{hunt.steps.length} étapes</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span>{hunt.visibility === 'PUBLIC' ? '🌍' : '🔒'}</span>
+                          <span>{hunt.visibility === 'PUBLIC' ? '' : ''}</span>
                           <span>{hunt.visibility === 'PUBLIC' ? 'Public' : 'Privé'}</span>
                         </div>
                       </div>
@@ -141,7 +141,7 @@ export default function CreatorHuntsPage() {
                       href={`/hunts/${hunt.id}`}
                       className="flex-1 sm:flex-none rounded-lg border border-gray-300 px-4 py-2 text-center font-medium text-gray-900 transition-all hover:bg-gray-50 active:scale-95"
                     >
-                      ✏️ Éditer
+                      Éditer
                     </Link>
 
                     {hunt.status === HuntStatus.DRAFT && (
@@ -150,7 +150,7 @@ export default function CreatorHuntsPage() {
                           onClick={() => setDeleteConfirm(hunt.id)}
                           className="flex-1 sm:flex-none rounded-lg border border-red-300 px-4 py-2 text-center font-medium text-red-600 transition-all hover:bg-red-50 active:scale-95"
                         >
-                          🗑️ Supprimer
+                          Supprimer
                         </button>
 
                         {deleteConfirm === hunt.id && (
@@ -180,7 +180,7 @@ export default function CreatorHuntsPage() {
                         className="flex-1 sm:flex-none rounded-lg bg-gradient-to-r from-green-600 to-green-700 px-4 py-2 text-center font-medium text-white transition-all hover:shadow-md hover:from-green-700 hover:to-green-800 active:scale-95"
                         disabled
                       >
-                        🚀 Publier (coming soon)
+                        Publier (coming soon)
                       </button>
                     )}
                   </div>

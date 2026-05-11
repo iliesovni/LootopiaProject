@@ -101,13 +101,13 @@ export default function DiscoverPage() {
                       <span className="truncate">{hunt.location}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span>🗺️</span>
+                      <span></span>
                       <span>{hunt._count.steps} étape{hunt._count.steps !== 1 ? 's' : ''}</span>
                     </div>
                   </div>
 
                   <div className="mt-auto flex items-center justify-between border-t border-gray-100 pt-3">
-                    <span className="text-xs text-gray-500">👤 {hunt.createdBy.username}</span>
+                    <span className="text-xs text-gray-500">{hunt.createdBy.username}</span>
                     <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-green-50 to-green-100 px-2 py-1 text-xs font-medium text-green-700">
                       Rejoindre →
                     </span>

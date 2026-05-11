@@ -35,9 +35,9 @@ export default function MyHuntsPage() {
 
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, { label: string; color: string; icon: string }> = {
-      IN_PROGRESS: { label: 'En cours', color: 'bg-blue-100 text-blue-800', icon: '🎮' },
-      COMPLETED: { label: 'Terminée', color: 'bg-green-100 text-green-800', icon: '✅' },
-      ABANDONED: { label: 'Abandonnée', color: 'bg-gray-100 text-gray-800', icon: '⊘' },
+      IN_PROGRESS: { label: 'En cours', color: 'bg-blue-100 text-blue-800', icon: '' },
+      COMPLETED: { label: 'Terminée', color: 'bg-green-100 text-green-800', icon: '' },
+      ABANDONED: { label: 'Abandonnée', color: 'bg-gray-100 text-gray-800', icon: '' },
     }
     const s = statusMap[status] || { label: status, color: 'bg-gray-100 text-gray-800', icon: '◯' }
     return (
@@ -127,8 +127,8 @@ export default function MyHuntsPage() {
                         {participation.hunt?.title}
                       </h2>
                       <div className="mt-2 flex items-center gap-4 text-sm text-gray-600">
-                        <span className="flex items-center gap-1">📍 {participation.hunt?.location}</span>
-                        <span className="flex items-center gap-1">📊 {participation.totalScore} points</span>
+                        <span className="flex items-center gap-1">{participation.hunt?.location}</span>
+                        <span className="flex items-center gap-1">{participation.totalScore} points</span>
                       </div>
 
                       <div className="mt-3 space-y-2">
