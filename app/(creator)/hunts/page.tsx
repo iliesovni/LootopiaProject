@@ -41,6 +41,16 @@ export default function CreatorHuntsPage() {
     }
   }
 
+  const handlePublishHunt = async (huntId: string) => {
+    try {
+      await apiClient.publishHunt(huntId)
+      setHunts((hunts ?? []).map((h) => (h.id === huntId ? { ...h, status: HuntStatus.PUBLISHED } : h)))
+    } catch (err) {
+      const message = err instanceof ApiClientError ? err.message : 'Erreur lors de la publication'
+      setError(message)
+    }
+  }
+
   if (isLoading) {
     return (
       <main className="min-h-[calc(100vh-60px)] bg-gradient-to-br from-slate-50 to-slate-100 px-4 py-8 sm:px-6">
@@ -177,10 +187,10 @@ export default function CreatorHuntsPage() {
 
                     {hunt.status === HuntStatus.DRAFT && hunt.steps.length > 0 && (
                       <button
+                        onClick={() => handlePublishHunt(hunt.id)}
                         className="flex-1 sm:flex-none rounded-lg bg-gradient-to-r from-green-600 to-green-700 px-4 py-2 text-center font-medium text-white transition-all hover:shadow-md hover:from-green-700 hover:to-green-800 active:scale-95"
-                        disabled
                       >
-                        Publier (coming soon)
+                        Publier
                       </button>
                     )}
                   </div>

@@ -262,7 +262,7 @@ export const apiClient = {
       method: 'GET',
     }),
   getHuntDetail: (huntId: string) =>
-    request<HuntPublicDetail>(`/api/hunts/${huntId}`, {
+    request<HuntPublicDetail | HuntOwnerDetail>(`/api/hunts/${huntId}`, {
       method: 'GET',
     }),
 
