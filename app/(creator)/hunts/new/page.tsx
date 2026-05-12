@@ -41,7 +41,7 @@ export default function CreateHuntPage() {
     try {
       setIsSubmitting(true)
       await apiClient.createHunt(validation.data)
-      router.push('/creator/hunts')
+      router.push('/hunts')
     } catch (err) {
       const message = err instanceof ApiClientError ? err.message : 'Erreur lors de la création'
       setError(message)
@@ -206,7 +206,7 @@ export default function CreateHuntPage() {
                 {isSubmitting ? 'Création en cours...' : 'Créer la chasse'}
               </button>
               <Link
-                href="/creator/hunts"
+                href="/hunts"
                 className="flex-1 rounded-lg border-2 border-gray-300 px-6 py-3 text-center font-semibold text-gray-900 transition-all hover:border-gray-400 hover:bg-gray-50 active:scale-95"
               >
                 Annuler

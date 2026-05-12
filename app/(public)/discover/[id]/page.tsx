@@ -25,7 +25,7 @@ export default function HuntDetailPage() {
     async function loadHunt() {
       try {
         setIsLoadingHunt(true)
-        const huntData = await apiClient.getHuntDetail(huntId)
+        const huntData = await apiClient.getHuntDetail(huntId) as HuntPublicDetail
         setHunt(huntData)
       } catch (err) {
         const message = err instanceof ApiClientError ? err.message : 'Erreur lors du chargement'
