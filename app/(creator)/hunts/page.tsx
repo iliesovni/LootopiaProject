@@ -12,6 +12,7 @@ export default function CreatorHuntsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string>('')
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [publishConfirm, setPublishConfirm] = useState<string | null>(null)
 
   useEffect(() => {
     async function loadHunts() {
@@ -43,10 +44,38 @@ export default function CreatorHuntsPage() {
 
   const handlePublishHunt = async (huntId: string) => {
     try {
-      await apiClient.publishHunt(huntId)
-      setHunts((hunts ?? []).map((h) => (h.id === huntId ? { ...h, status: HuntStatus.PUBLISHED } : h)))
+      const publishedHunt = await apiClient.publishHunt(huntId)
+      setHunts((hunts ?? []).map((h) => (h.id === huntId ? publishedHunt : h)))
     } catch (err) {
-      const message = err instanceof ApiClientError ? err.message : 'Erreur lors de la publication'
+      console.error('Publish error:', err)
+      if (err instanceof ApiClientError) {
+        console.error('Error code:', err.code, 'Status:', err.status)
+      }
+      let message = 'Erreur lors de la publication'
+      if (err instanceof ApiClientError) {
+        switch (err.code) {
+          case 'HUNT_NOT_ENOUGH_STEPS':
+            message = 'La chasse doit avoir au moins 2 étapes pour être publiée'
+            break
+          case 'HUNT_MISSING_ACCESS_CODE':
+            message = "Une chasse privée doit avoir un code d'accès"
+            break
+          case 'HUNT_INVALID_STEP_ORDER':
+            message = 'Les étapes de la chasse ne sont pas dans le bon ordre'
+            break
+          case 'HUNT_ALREADY_PUBLISHED':
+            message = 'Cette chasse est déjà publiée'
+            break
+          case 'HUNT_NOT_DRAFT':
+            message = 'Seules les chasses en brouillon peuvent être publiées'
+            break
+          case 'HUNT_DELETED':
+            message = 'Cette chasse a été supprimée'
+            break
+          default:
+            message = err.message || 'Erreur inconnue lors de la publication'
+        }
+      }
       setError(message)
     }
   }
@@ -182,12 +211,53 @@ export default function CreatorHuntsPage() {
                             </div>
                           </div>
                         )}
+
+                        {publishConfirm === hunt.id && (
+                          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+                              <div className="flex items-center mb-4">
+                                <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                </div>
+                                <div className="ml-4">
+                                  <h3 className="text-lg font-semibold text-gray-900">Publier la chasse</h3>
+                                  <p className="text-sm text-gray-600">Confirmer la publication</p>
+                                </div>
+                              </div>
+                              <div className="mb-6">
+                                <p className="text-sm text-gray-700">
+                                  Attention ! Une fois publiée, cette chasse ne pourra plus être modifiée.
+                                  Assurez-vous que toutes les étapes et indices sont corrects.
+                                </p>
+                              </div>
+                              <div className="flex gap-3">
+                                <button
+                                  onClick={() => {
+                                    setPublishConfirm(null)
+                                    handlePublishHunt(hunt.id)
+                                  }}
+                                  className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors"
+                                >
+                                  Publier maintenant
+                                </button>
+                                <button
+                                  onClick={() => setPublishConfirm(null)}
+                                  className="flex-1 border border-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                                >
+                                  Annuler
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </>
                     )}
 
                     {hunt.status === HuntStatus.DRAFT && hunt.steps.length > 0 && (
                       <button
-                        onClick={() => handlePublishHunt(hunt.id)}
+                        onClick={() => setPublishConfirm(hunt.id)}
                         className="flex-1 sm:flex-none rounded-lg bg-gradient-to-r from-green-600 to-green-700 px-4 py-2 text-center font-medium text-white transition-all hover:shadow-md hover:from-green-700 hover:to-green-800 active:scale-95"
                       >
                         Publier
