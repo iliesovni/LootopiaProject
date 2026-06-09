@@ -9,6 +9,25 @@ import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 import type { LatLngExpression, LatLngTuple } from 'leaflet'
 
+type AssetImport =
+  | string
+  | { src: string }
+  | { default: string }
+  | { default: { src: string } }
+
+function assetSrc(asset: AssetImport): string {
+  if (typeof asset === 'string') return asset
+  if ('src' in asset && typeof asset.src === 'string') return asset.src
+  if ('default' in asset) {
+    const d = asset.default as unknown
+    if (typeof d === 'string') return d
+    if (d && typeof d === 'object' && 'src' in d && typeof (d as { src: string }).src === 'string') {
+      return (d as { src: string }).src
+    }
+  }
+  return String(asset)
+}
+
 export interface Destination {
   id?: string | number
   position: LatLngTuple
@@ -218,13 +237,15 @@ export default function Map({
     let cancelled = false
     ;(async () => {
       const Lmod = await import('leaflet')
-      const L: any = (Lmod as any).default ?? Lmod
-      const iconRetinaUrl = (markerIcon2x as any).src ?? (markerIcon2x as any).default ?? markerIcon2x
-      const iconUrl = (markerIcon as any).src ?? (markerIcon as any).default ?? markerIcon
-      const shadowUrl = (markerShadow as any).src ?? (markerShadow as any).default ?? markerShadow
-      if (L?.Icon?.Default?.prototype?._getIconUrl) {
-        delete (L.Icon.Default.prototype as any)._getIconUrl
-      }
+      const L = (('default' in Lmod ? (Lmod as unknown as { default: typeof import('leaflet') }).default : Lmod) ??
+        Lmod) as typeof import('leaflet')
+
+      const iconRetinaUrl = assetSrc(markerIcon2x as AssetImport)
+      const iconUrl = assetSrc(markerIcon as AssetImport)
+      const shadowUrl = assetSrc(markerShadow as AssetImport)
+
+      const proto = L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown }
+      if (proto._getIconUrl) delete proto._getIconUrl
       L.Icon.Default.mergeOptions({ iconRetinaUrl, iconUrl, shadowUrl })
       if (!cancelled) setIconsReady(true)
     })()
