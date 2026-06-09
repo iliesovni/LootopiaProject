@@ -1,5 +1,5 @@
 import { AuthError, type CurrentUser, getCurrentUser } from "@/lib/auth/current-user";
-import { Role } from "@prisma/client";
+import type { Role } from "@/lib/auth/roles";
 
 export async function requireAuth(): Promise<CurrentUser> {
     return getCurrentUser();
