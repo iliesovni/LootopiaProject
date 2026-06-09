@@ -8,7 +8,7 @@ type SessionContextValue = {
   isLoading: boolean
   isAuthenticated: boolean
   refreshSession: () => Promise<void>
-  login: (input: LoginInput) => Promise<void>
+  login: (input: LoginInput) => Promise<AuthUser>
   register: (input: RegisterInput) => Promise<void>
   logout: () => Promise<void>
 }
@@ -35,6 +35,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   async function login(input: LoginInput) {
     const loggedInUser = await apiClient.login(input)
     setUser(loggedInUser)
+    return loggedInUser
   }
 
   async function register(input: RegisterInput) {

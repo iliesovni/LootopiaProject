@@ -1,15 +1,20 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { ApiClientError } from '@/lib/frontend/api-client'
 import { useSession } from '@/components/auth/SessionProvider'
 
 export default function AppHeader() {
+  const pathname = usePathname()
   const router = useRouter()
   const { user, isAuthenticated, logout, isLoading } = useSession()
   const [errorMessage, setErrorMessage] = useState('')
+
+  if (pathname.startsWith('/backoffice')) {
+    return null
+  }
 
   async function handleLogout() {
     setErrorMessage('')

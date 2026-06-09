@@ -1,25 +1,36 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { FormEvent, useEffect, useState } from 'react'
 import { useSession } from '@/components/auth/SessionProvider'
+import type { AuthUser } from '@/lib/frontend/api-client'
 import { ApiClientError } from '@/lib/frontend/api-client'
 import { loginSchema } from '@/schemas/auth'
 
+function resolvePostLoginPath(user: AuthUser, redirectTo: string) {
+  if (redirectTo.startsWith('/backoffice')) {
+    return '/backoffice'
+  }
+  if (redirectTo.startsWith('/')) return redirectTo
+  return '/'
+}
+
 export default function LoginPage() {
   const router = useRouter()
-  const { login, isAuthenticated, isLoading } = useSession()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams.get('redirect') ?? ''
+  const { login, user, isAuthenticated, isLoading } = useSession()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      router.replace('/')
+    if (!isLoading && isAuthenticated && user) {
+      router.replace(resolvePostLoginPath(user, redirectTo))
     }
-  }, [isAuthenticated, isLoading, router])
+  }, [isAuthenticated, isLoading, redirectTo, router, user])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -33,8 +44,8 @@ export default function LoginPage() {
 
     setIsSubmitting(true)
     try {
-      await login(validation.data)
-      router.push('/')
+      const loggedInUser = await login(validation.data)
+      router.push(resolvePostLoginPath(loggedInUser, redirectTo))
     } catch (error) {
       if (error instanceof ApiClientError) {
         setErrorMessage(error.message)
