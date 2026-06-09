@@ -48,7 +48,11 @@ export async function POST(request: NextRequest) {
             return apiValidationError(validation.error);
         }
 
-        if (currentUser.role !== Role.PLAYER && currentUser.role !== Role.PARTNER) {
+        if (
+            currentUser.role !== Role.PLAYER &&
+            currentUser.role !== Role.PARTNER &&
+            currentUser.role !== Role.ADMIN
+        ) {
             return apiError(
                 "Ce rôle n'est pas autorisé à créer une chasse.",
                 "FORBIDDEN_ROLE",
