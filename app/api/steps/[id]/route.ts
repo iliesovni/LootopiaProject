@@ -1,0 +1,117 @@
+import { apiError, apiSuccess } from "@/lib/api/responses";
+import { apiValidationError } from "@/lib/api/validation";
+import { AuthError } from "@/lib/auth/current-user";
+import { requireAuth } from "@/lib/auth/guards";
+import { deleteStep, getStepById, mapStepError, updateStep } from "@/lib/services/step.service";
+import { updateStepSchema } from "@/schemas/step";
+import { NextRequest } from "next/server";
+
+type RouteContext = {
+    params: Promise<{
+        id: string;
+    }>;
+};
+
+export async function GET(
+    _request: NextRequest,
+    { params }: RouteContext,
+) {
+    try {
+        const currentUser = await requireAuth();
+        const { id } = await params;
+
+        const step = await getStepById({
+            stepId: id,
+            currentUserId: currentUser.id,
+        });
+
+        return apiSuccess("Étape récupérée.", step);
+    } catch (error) {
+        console.error("GET /api/steps/[id] error:", error);
+
+        const mapped = mapStepError(error);
+        if (mapped) return mapped;
+
+        if (error instanceof AuthError) {
+            return apiError(error.message, error.code, error.status);
+        }
+
+        return apiError(
+            "Erreur lors de la récupération de l'étape.",
+            "INTERNAL_SERVER_ERROR",
+            500,
+        );
+    }
+}
+
+export async function PATCH(
+    request: NextRequest,
+    context: { params: Promise<{ id: string }> },
+) {
+    try {
+        const currentUser = await requireAuth();
+        const { id } = await context.params;
+        const body = await request.json();
+
+        const validation = updateStepSchema.safeParse(body);
+
+        if (!validation.success) {
+            return apiValidationError(validation.error);
+        }
+
+        const updatedStep = await updateStep({
+            stepId: id,
+            currentUserId: currentUser.id,
+            data: validation.data,
+        });
+
+        return apiSuccess("Étape mise à jour avec succès.", updatedStep);
+    } catch (error) {
+        console.error("PATCH /api/steps/[id] error:", error);
+
+        const mapped = mapStepError(error);
+        if (mapped) return mapped;
+
+        if (error instanceof AuthError) {
+            return apiError(error.message, error.code, error.status);
+        }
+
+        return apiError(
+            "Erreur lors de la mise à jour de l'étape.",
+            "INTERNAL_SERVER_ERROR",
+            500,
+        );
+    }
+}
+
+export async function DELETE(
+    _request: NextRequest,
+    { params }: RouteContext,
+) {
+    try {
+        const currentUser = await requireAuth();
+        const { id } = await params;
+
+        await deleteStep({
+            stepId: id,
+            currentUserId: currentUser.id,
+        });
+
+        return apiSuccess("Étape supprimée avec succès.");
+    } catch (error) {
+        console.error("DELETE /api/steps/[id] error:", error);
+
+        const mapped = mapStepError(error);
+        if (mapped) return mapped;
+
+        if (error instanceof AuthError) {
+            return apiError(error.message, error.code, error.status);
+        }
+
+        return apiError(
+            "Erreur lors de la suppression de l'étape.",
+            "INTERNAL_SERVER_ERROR",
+            500,
+        );
+    }
+}
