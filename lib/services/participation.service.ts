@@ -424,6 +424,8 @@ export async function getParticipationGameplay({ participationId, userId }: GetP
                           radiusMeters: currentProgress.step.radiusMeters,
                           orderIndex: currentProgress.step.orderIndex,
                           pointsReward: currentProgress.step.pointsReward,
+                          arMarkerType: currentProgress.step.arMarkerType,
+                          arAssetUrl: currentProgress.step.arAssetUrl,
                           clues: mapStepCluesForGameplay(
                               currentProgress.step.clues,
                               currentProgress.cluesUsed,

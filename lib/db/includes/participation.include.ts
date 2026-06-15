@@ -79,6 +79,8 @@ export const participationProgressInternalSelect = {
                     radiusMeters: true,
                     orderIndex: true,
                     pointsReward: true,
+                    arMarkerType: true,
+                    arAssetUrl: true,
                     clues: {
                         orderBy: {
                             orderIndex: "asc" as const,

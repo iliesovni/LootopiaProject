@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Map, { Destination, haversineDistance } from '@/components/Map'
+import StepARValidation from '@/components/StepARValidation'
 import {
   apiClient,
   ApiClientError,
@@ -46,6 +47,7 @@ export default function HuntGameplayMap({
   const [actionError, setActionError] = useState('')
   const [isUsingClue, setIsUsingClue] = useState(false)
   const [isCompletingStep, setIsCompletingStep] = useState(false)
+  const [isArValidationOpen, setIsArValidationOpen] = useState(false)
   const [lastPointsEarned, setLastPointsEarned] = useState<number | null>(null)
 
   const currentStep = gameplay.participation.currentStep
@@ -163,13 +165,21 @@ export default function HuntGameplayMap({
       const result: CompleteStepResult = await apiClient.completeStep(participationId, {
         stepId: currentStep.stepId,
       })
+      setIsArValidationOpen(false)
       await refreshGameplay()
       setLastPointsEarned(result.pointsEarned)
     } catch (error) {
       setActionError(error instanceof ApiClientError ? error.message : "Impossible de valider l'étape.")
+      throw error
     } finally {
       setIsCompletingStep(false)
     }
+  }
+
+  function handleOpenArValidation() {
+    if (!currentStep || !isInValidationZone) return
+    setActionError('')
+    setIsArValidationOpen(true)
   }
 
   async function handleFinishHunt() {
@@ -191,6 +201,18 @@ export default function HuntGameplayMap({
   }
 
   return (
+    <>
+      {isArValidationOpen && currentStep && (
+        <StepARValidation
+          stepTitle={currentStep.step.title}
+          arMarkerType={currentStep.step.arMarkerType}
+          arAssetUrl={currentStep.step.arAssetUrl}
+          onValidated={handleCompleteStep}
+          onCancel={() => setIsArValidationOpen(false)}
+          isSubmitting={isCompletingStep}
+        />
+      )}
+
     <div className="relative flex h-[calc(100vh-60px)] flex-col">
       <div className="absolute left-0 right-0 top-0 z-[1000] flex items-center justify-between gap-3 bg-white/95 px-4 py-3 shadow-md backdrop-blur">
         <Link
@@ -312,14 +334,14 @@ export default function HuntGameplayMap({
 
               <button
                 type="button"
-                onClick={handleCompleteStep}
-                disabled={!isInValidationZone || isCompletingStep || isUsingClue}
+                onClick={handleOpenArValidation}
+                disabled={!isInValidationZone || isCompletingStep || isUsingClue || isArValidationOpen}
                 className="flex-1 rounded-lg bg-gradient-to-r from-green-600 to-green-700 px-4 py-3 text-sm font-semibold text-white hover:from-green-700 hover:to-green-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isCompletingStep
                   ? 'Validation...'
                   : isInValidationZone
-                    ? "Valider l'étape"
+                    ? "Valider l'étape (AR)"
                     : !isPointRevealed
                       ? 'Approche-toi pour révéler le point'
                       : 'Entre dans la zone de validation'}
@@ -348,7 +370,7 @@ export default function HuntGameplayMap({
 
             {isInValidationZone && (
               <p className="text-center text-xs text-green-700">
-                Tu es dans la zone de validation — tu peux valider l&apos;étape.
+                Tu es dans la zone — lance la validation AR pour trouver l&apos;objet et valider l&apos;étape.
               </p>
             )}
           </div>
@@ -361,5 +383,6 @@ export default function HuntGameplayMap({
         )}
       </div>
     </div>
+    </>
   )
 }
