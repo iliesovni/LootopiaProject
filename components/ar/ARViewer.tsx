@@ -1,14 +1,21 @@
 import * as THREE from "three";
 import { App, GpsReceivedEvent } from "locar";
 import { useEffect } from "react";
-
-const ARView = () => {
+interface ARViewProps {
+  participationId: string;
+}
+const ARView = ({ participationId }: ARViewProps) => {
   useEffect(() => {
     const initLocar = async () => {
       const app = new App({
         cameraOptions: { hFov: 80, near: 0.001, far: 1000 },
       });
-
+      const participation = await (
+        await fetch(`/api/participations/${participationId}`)
+      ).json();
+      const currentStep = await (
+        await fetch(`/api/steps/${participation.data.currentStep.stepId}`)
+      ).json();
       try {
         let firstLocation = true;
         const locar = await app.start();
@@ -18,47 +25,16 @@ const ARView = () => {
 
         locar.on("gpsupdate", (ev: GpsReceivedEvent) => {
           if (firstLocation) {
-            alert(
-              `Got the initial location: longitude ${ev.position.coords.longitude}, latitude ${ev.position.coords.latitude}`,
-            );
-
-            const boxProps = [
-              {
-                latDis: 0.0005,
-                lonDis: 0,
-                colour: 0xff0000,
-              },
-              {
-                latDis: -0.0005,
-                lonDis: 0,
-                colour: 0xffff00,
-              },
-              {
-                latDis: 0,
-                lonDis: -0.0005,
-                colour: 0x00ffff,
-              },
-              {
-                latDis: 0,
-                lonDis: 0.0005,
-                colour: 0x00ff00,
-              },
-            ];
-
             const geom = new THREE.BoxGeometry(10, 10, 10);
-
-            for (const boxProp of boxProps) {
-              const mesh = new THREE.Mesh(
-                geom,
-                new THREE.MeshBasicMaterial({ color: boxProp.colour }),
-              );
-
-              locar.add(
-                mesh,
-                ev.position.coords.longitude + boxProp.lonDis,
-                ev.position.coords.latitude + boxProp.latDis,
-              );
-            }
+            const mesh = new THREE.Mesh(
+              geom,
+              new THREE.MeshBasicMaterial({ color: "0xff0000" }),
+            );
+            locar.add(
+              mesh,
+              currentStep.data.longitude,
+              currentStep.data.latitude,
+            );
 
             firstLocation = false;
           }
@@ -71,7 +47,7 @@ const ARView = () => {
       }
     };
     initLocar();
-  });
+  }, [participationId]);
   return <></>;
 };
 export default ARView;

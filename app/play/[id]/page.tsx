@@ -1,6 +1,8 @@
 "use client";
 import ARViewer from "@/components/ar/ARViewer";
+import { useParams } from "next/navigation";
 
 export default function PlayPage() {
-  return <ARViewer />;
+  const { id }: { id: string } = useParams();
+  return <ARViewer participationId={id} />;
 }
