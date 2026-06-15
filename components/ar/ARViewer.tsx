@@ -18,6 +18,8 @@ interface Step {
   data: {
     longitude: number;
     latitude: number;
+    id: string;
+    nextStepId?: string; // Add nextStepId to the Step interface
   };
 }
 
@@ -31,11 +33,11 @@ const ARView = ({ participationId }: ARViewProps) => {
   const [isInsideRadius, setIsInsideRadius] = useState(false);
 
   useEffect(() => {
-    const initLocar = async () => {
-      const app = new App({
-        cameraOptions: { hFov: 80, near: 0.001, far: 1000 },
-      });
+    const app = new App({
+      cameraOptions: { hFov: 80, near: 0.001, far: 1000 },
+    });
 
+    const initLocar = async () => {
       try {
         // Fetch participation first
         const participationResponse = await fetch(
@@ -58,6 +60,8 @@ const ARView = ({ participationId }: ARViewProps) => {
           alert(`GPS error: ${error.code}`);
         });
 
+        let firstLocation = true;
+
         locar.on("gpsupdate", async (ev: GpsReceivedEvent) => {
           if (!currentStep) return; // Skip if currentStep is not loaded yet
 
@@ -79,18 +83,38 @@ const ARView = ({ participationId }: ARViewProps) => {
           // Check if the user is within the radius
           const withinRadius =
             Math.abs(ev.position.coords.latitude - currentStep.data.latitude) <
-              radiusToLocationMeter &&
+              radiusToLocationMeter / 111320 && // Convert meters to degrees (approx)
             Math.abs(
               ev.position.coords.longitude - currentStep.data.longitude,
-            ) < radiusToLocationMeter;
+            ) <
+              radiusToLocationMeter /
+                (111320 *
+                  Math.cos(currentStep.data.latitude * (Math.PI / 180))); // Adjust for longitude
 
           // If the user was outside and is now inside, complete the step
           if (!isInsideRadius && withinRadius && !stepCompleted) {
+            // Mark the current step as completed
             await fetch(
               `/api/participation/${participationId}/complete-steps`,
-              { method: "POST" },
+              {
+                method: "POST",
+                body: JSON.stringify({ stepId: currentStep.data.id }),
+              },
             );
-            setStepCompleted(true);
+
+            // Fetch the next step if available
+            if (currentStep.data.nextStepId) {
+              const nextStepResponse = await fetch(
+                `/api/steps/${currentStep.data.nextStepId}`,
+              );
+              const nextStepData: Step = await nextStepResponse.json();
+              setCurrentStep(nextStepData);
+              setStepCompleted(false);
+              setIsInsideRadius(false);
+              firstLocation = true; // Reset for the new step
+            } else {
+              setStepCompleted(true); // No more steps
+            }
           }
 
           // Update the radius state
@@ -103,7 +127,6 @@ const ARView = ({ participationId }: ARViewProps) => {
       }
     };
 
-    let firstLocation = true; // Moved outside to avoid re-initialization
     initLocar();
   }, [participationId]);
 
