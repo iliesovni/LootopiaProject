@@ -374,6 +374,8 @@ export type ParticipationGameplay = {
         radiusMeters: number
         orderIndex: number
         pointsReward: number
+        arMarkerType: string | null
+        arAssetUrl: string | null
         clues: ParticipationGameplayClue[]
       }
     } | null
