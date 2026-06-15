@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Map, { Destination } from '@/components/Map'
+import Map, { Destination, haversineDistance } from '@/components/Map'
 import {
   apiClient,
   ApiClientError,
@@ -17,6 +17,12 @@ type HuntGameplayMapProps = {
 }
 
 type Position = { lat: number; lng: number }
+
+const STEP_REVEAL_PADDING_METERS = 15
+
+function getStepRevealThreshold(radiusMeters: number) {
+  return STEP_REVEAL_PADDING_METERS + radiusMeters
+}
 
 function isValidCoord(lat: number, lng: number) {
   return (
@@ -37,7 +43,6 @@ export default function HuntGameplayMap({
   const [gameplay, setGameplay] = useState(initialGameplay)
   const [position, setPosition] = useState<Position | null>(null)
   const [isGeoReady, setIsGeoReady] = useState(false)
-  const [isInRange, setIsInRange] = useState(false)
   const [actionError, setActionError] = useState('')
   const [isUsingClue, setIsUsingClue] = useState(false)
   const [isCompletingStep, setIsCompletingStep] = useState(false)
@@ -46,8 +51,35 @@ export default function HuntGameplayMap({
   const currentStep = gameplay.participation.currentStep
   const stepNumber = currentStep ? currentStep.step.orderIndex + 1 : gameplay.participation.totalStepsCount
 
-  const destinations: Destination[] = useMemo(() => {
-    if (!currentStep) return []
+  const distanceToStep = useMemo(() => {
+    if (!currentStep || !position) return null
+    return haversineDistance(
+      [position.lat, position.lng],
+      [currentStep.step.latitude, currentStep.step.longitude],
+    )
+  }, [currentStep, position])
+
+  const stepRevealThreshold = currentStep
+    ? getStepRevealThreshold(currentStep.step.radiusMeters)
+    : null
+
+  const isPointRevealed =
+    distanceToStep !== null &&
+    stepRevealThreshold !== null &&
+    distanceToStep <= stepRevealThreshold
+
+  const isInValidationZone = useMemo(() => {
+    if (!currentStep || !position) return false
+    return (
+      haversineDistance(
+        [position.lat, position.lng],
+        [currentStep.step.latitude, currentStep.step.longitude],
+      ) <= currentStep.step.radiusMeters
+    )
+  }, [currentStep, position])
+
+  const visibleDestinations: Destination[] = useMemo(() => {
+    if (!currentStep || !isPointRevealed) return []
 
     return [
       {
@@ -58,14 +90,13 @@ export default function HuntGameplayMap({
         description: currentStep.step.description,
       },
     ]
-  }, [currentStep])
+  }, [currentStep, isPointRevealed])
 
   const mapCenter: [number, number] = useMemo(() => {
-    if (currentStep) {
-      return [currentStep.step.latitude, currentStep.step.longitude]
-    }
+    if (position) return [position.lat, position.lng]
+    if (currentStep) return [currentStep.step.latitude, currentStep.step.longitude]
     return [48.8566, 2.3522]
-  }, [currentStep])
+  }, [position, currentStep])
 
   const revealedClues = currentStep?.step.clues.filter((clue) => clue.content) ?? []
   const nextClue = currentStep?.step.clues[currentStep.cluesUsed]
@@ -79,10 +110,6 @@ export default function HuntGameplayMap({
     onGameplayChange(updated)
     return updated
   }, [onGameplayChange, participationId])
-
-  useEffect(() => {
-    setIsInRange(false)
-  }, [currentStep?.stepId])
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -136,7 +163,6 @@ export default function HuntGameplayMap({
       const result: CompleteStepResult = await apiClient.completeStep(participationId, {
         stepId: currentStep.stepId,
       })
-      setIsInRange(false)
       await refreshGameplay()
       setLastPointsEarned(result.pointsEarned)
     } catch (error) {
@@ -195,10 +221,21 @@ export default function HuntGameplayMap({
             zoom={16}
             height="100%"
             markerPosition={position ? [position.lat, position.lng] : null}
-            destinations={destinations}
-            onDestinationReached={() => setIsInRange(true)}
-            onDestinationLeft={() => setIsInRange(false)}
+            destinations={visibleDestinations}
           />
+
+          {currentStep && !isPointRevealed && stepRevealThreshold !== null && (
+            <div className="pointer-events-none absolute left-1/2 top-4 z-[1000] max-w-sm -translate-x-1/2 rounded-lg bg-white/95 px-4 py-2 text-center text-sm text-gray-700 shadow-md backdrop-blur">
+              {distanceToStep !== null ? (
+                <>
+                  Point masqué — encore{' '}
+                  <strong>{Math.max(0, Math.ceil(distanceToStep - stepRevealThreshold))} m</strong>
+                </>
+              ) : (
+                <>Active la localisation pour révéler le point</>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -276,20 +313,42 @@ export default function HuntGameplayMap({
               <button
                 type="button"
                 onClick={handleCompleteStep}
-                disabled={!isInRange || isCompletingStep || isUsingClue}
+                disabled={!isInValidationZone || isCompletingStep || isUsingClue}
                 className="flex-1 rounded-lg bg-gradient-to-r from-green-600 to-green-700 px-4 py-3 text-sm font-semibold text-white hover:from-green-700 hover:to-green-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isCompletingStep
                   ? 'Validation...'
-                  : isInRange
+                  : isInValidationZone
                     ? "Valider l'étape"
-                    : 'Approche-toi du point'}
+                    : !isPointRevealed
+                      ? 'Approche-toi pour révéler le point'
+                      : 'Entre dans la zone de validation'}
               </button>
             </div>
 
-            {!isInRange && (
+            {!isPointRevealed && stepRevealThreshold !== null && (
               <p className="text-center text-xs text-gray-500">
-                Entre dans la zone bleue sur la carte pour pouvoir valider cette étape.
+                Le point apparaît à moins de {stepRevealThreshold} m du centre (
+                {STEP_REVEAL_PADDING_METERS} m + zone de {currentStep.step.radiusMeters} m).
+                {distanceToStep !== null && (
+                  <> Distance actuelle : {Math.round(distanceToStep)} m.</>
+                )}
+              </p>
+            )}
+
+            {isPointRevealed && !isInValidationZone && (
+              <p className="text-center text-xs text-gray-500">
+                Entre dans la zone bleue sur la carte pour valider cette étape.
+                {distanceToStep !== null && (
+                  <> Distance au centre : {Math.round(distanceToStep)} m (zone :{' '}
+                  {currentStep.step.radiusMeters} m).</>
+                )}
+              </p>
+            )}
+
+            {isInValidationZone && (
+              <p className="text-center text-xs text-green-700">
+                Tu es dans la zone de validation — tu peux valider l&apos;étape.
               </p>
             )}
           </div>
