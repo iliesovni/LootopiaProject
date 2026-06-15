@@ -73,6 +73,10 @@ export const participationProgressInternalSelect = {
                 select: {
                     id: true,
                     title: true,
+                    description: true,
+                    latitude: true,
+                    longitude: true,
+                    radiusMeters: true,
                     orderIndex: true,
                     pointsReward: true,
                     clues: {

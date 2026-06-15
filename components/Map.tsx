@@ -32,7 +32,7 @@ export interface MapProps {
   onDestinationLeft?: (destination: Destination, index: number) => void
 }
 
-function haversineDistance(a: LatLngTuple, b: LatLngTuple): number {
+export function haversineDistance(a: LatLngTuple, b: LatLngTuple): number {
   const R = 6371000
   const toRad = (deg: number) => (deg * Math.PI) / 180
   const dLat = toRad(b[0] - a[0])
@@ -193,6 +193,10 @@ export default function Map({
     lastAcceptedRef.current = pos
     smoothTargetRef.current = pos
   }, [markerPosition])
+
+  useEffect(() => {
+    wasInsideRef.current = []
+  }, [destinations])
 
   useEffect(() => {
     if (!destinations.length || !markerPosition) return

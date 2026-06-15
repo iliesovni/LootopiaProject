@@ -44,6 +44,44 @@ export const huntPublicDetailSelect = {
     },
 } satisfies Prisma.HuntSelect;
 
+export const huntPreGameSelect = {
+    id: true,
+    title: true,
+    description: true,
+    location: true,
+    difficulty: true,
+    bannerUrl: true,
+    startLat: true,
+    startLng: true,
+    createdBy: {
+        select: {
+            username: true,
+        },
+    },
+    steps: {
+        orderBy: {
+            orderIndex: "asc" as const,
+        },
+        select: {
+            id: true,
+            title: true,
+            description: true,
+            orderIndex: true,
+            pointsReward: true,
+            _count: {
+                select: {
+                    clues: true,
+                },
+            },
+        },
+    },
+    _count: {
+        select: {
+            steps: true,
+        },
+    },
+} satisfies Prisma.HuntSelect;
+
 export const huntOwnerDetailSelect = {
     id: true,
     title: true,
