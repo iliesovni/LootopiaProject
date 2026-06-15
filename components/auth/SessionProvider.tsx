@@ -24,11 +24,37 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const currentUser = await apiClient.me()
       setUser(currentUser)
     } catch (error) {
-      if (error instanceof ApiClientError && error.status === 401) {
-        setUser(null)
-        return
+      if (error instanceof ApiClientError) {
+        if (error.status === 401) {
+          setUser(null)
+          return
+        }
+
+        if (error.status === 404) {
+          console.error('[SessionProvider] Route /api/auth/me introuvable (404).', {
+            path: error.path,
+            method: error.method,
+            code: error.code,
+            message: error.message,
+            details: error.details,
+          })
+          setUser(null)
+          return
+        }
+
+        console.error('[SessionProvider] Échec refreshSession.', {
+          path: error.path,
+          method: error.method,
+          status: error.status,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+        })
+      } else {
+        console.error('[SessionProvider] Erreur inattendue lors du refreshSession.', error)
       }
-      throw error
+
+      setUser(null)
     }
   }
 
@@ -52,6 +78,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     ;(async () => {
       try {
         await refreshSession()
+      } catch (error) {
+        console.error('[SessionProvider] Erreur non gérée au montage.', error)
+        if (active) setUser(null)
       } finally {
         if (active) setIsLoading(false)
       }
