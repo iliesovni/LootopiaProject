@@ -73,8 +73,14 @@ export const participationProgressInternalSelect = {
                 select: {
                     id: true,
                     title: true,
+                    description: true,
+                    latitude: true,
+                    longitude: true,
+                    radiusMeters: true,
                     orderIndex: true,
                     pointsReward: true,
+                    arMarkerType: true,
+                    arAssetUrl: true,
                     clues: {
                         orderBy: {
                             orderIndex: "asc" as const,

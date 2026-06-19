@@ -1,4 +1,5 @@
 import { apiError } from "@/lib/api/responses";
+import { huntPreGameSelect } from "@/lib/db/includes/hunt.include";
 import {
     participationProgressInternalSelect,
     participationPublicSelect,
@@ -309,6 +310,132 @@ export async function getParticipationById({ participationId, userId }: GetParti
     }
 
     return buildParticipationGameplayView(participation);
+}
+
+export async function getParticipationPreGame({ participationId, userId }: GetParticipationInput) {
+    const participation = await prisma.participation.findUnique({
+        where: { id: participationId },
+        select: participationPublicSelect,
+    });
+
+    if (!participation) {
+        throw new ParticipationError("PARTICIPATION_NOT_FOUND");
+    }
+
+    if (participation.userId !== userId) {
+        throw new ParticipationError("PARTICIPATION_FORBIDDEN");
+    }
+
+    const hunt = await prisma.hunt.findUnique({
+        where: { id: participation.huntId },
+        select: huntPreGameSelect,
+    });
+
+    if (!hunt) {
+        throw new ParticipationError("HUNT_NOT_FOUND");
+    }
+
+    const participants = await prisma.participation.findMany({
+        where: {
+            huntId: participation.huntId,
+        },
+        select: {
+            id: true,
+            totalScore: true,
+            status: true,
+            user: {
+                select: {
+                    username: true,
+                },
+            },
+        },
+        orderBy: [
+            { totalScore: "desc" },
+            { startedAt: "asc" },
+        ],
+    });
+
+    return {
+        participation: {
+            ...buildParticipationGameplayView(participation),
+            stepProgress: participation.stepProgress,
+        },
+        hunt,
+        participants: participants.map((entry) => ({
+            participationId: entry.id,
+            username: entry.user.username,
+            totalScore: entry.totalScore,
+            status: entry.status,
+            isCurrentUser: entry.id === participationId,
+        })),
+    };
+}
+
+function mapStepCluesForGameplay(
+    clues: Array<{ content: string; penaltyPoints: number; orderIndex: number }>,
+    cluesUsed: number,
+) {
+    return clues.map((clue, index) => ({
+        orderIndex: clue.orderIndex,
+        penaltyPoints: clue.penaltyPoints,
+        content: index < cluesUsed ? clue.content : undefined,
+    }));
+}
+
+export async function getParticipationGameplay({ participationId, userId }: GetParticipationInput) {
+    const participation = await prisma.participation.findUnique({
+        where: { id: participationId },
+        select: participationProgressInternalSelect,
+    });
+
+    if (!participation) {
+        throw new ParticipationError("PARTICIPATION_NOT_FOUND");
+    }
+
+    if (participation.userId !== userId) {
+        throw new ParticipationError("PARTICIPATION_FORBIDDEN");
+    }
+
+    if (participation.status !== ParticipationStatus.IN_PROGRESS) {
+        throw new ParticipationError("PARTICIPATION_NOT_IN_PROGRESS");
+    }
+
+    const currentProgress = participation.stepProgress.find((progress) => !progress.isCompleted) ?? null;
+    const completedStepsCount = participation.stepProgress.filter((progress) => progress.isCompleted).length;
+
+    return {
+        participation: {
+            id: participation.id,
+            status: participation.status,
+            totalScore: participation.totalScore,
+            huntId: participation.huntId,
+            completedStepsCount,
+            totalStepsCount: participation.stepProgress.length,
+            currentStep: currentProgress?.step
+                ? {
+                      stepId: currentProgress.stepId,
+                      cluesUsed: currentProgress.cluesUsed,
+                      step: {
+                          id: currentProgress.step.id,
+                          title: currentProgress.step.title,
+                          description: currentProgress.step.description,
+                          latitude: currentProgress.step.latitude,
+                          longitude: currentProgress.step.longitude,
+                          radiusMeters: currentProgress.step.radiusMeters,
+                          orderIndex: currentProgress.step.orderIndex,
+                          pointsReward: currentProgress.step.pointsReward,
+                          arMarkerType: currentProgress.step.arMarkerType,
+                          arAssetUrl: currentProgress.step.arAssetUrl,
+                          clues: mapStepCluesForGameplay(
+                              currentProgress.step.clues,
+                              currentProgress.cluesUsed,
+                          ),
+                      },
+                  }
+                : null,
+        },
+        hunt: participation.hunt,
+    };
 }
 
 export async function startParticipation({ userId, huntId, accessCode }: StartParticipationInput) {

@@ -30,29 +30,112 @@ export class ApiClientError extends Error {
   status: number
   code: string
   details?: unknown
+  path: string
+  method: string
 
-  constructor(message: string, status: number, code = 'UNKNOWN_ERROR', details?: unknown) {
+  constructor(
+    message: string,
+    status: number,
+    code = 'UNKNOWN_ERROR',
+    details?: unknown,
+    context?: { path?: string; method?: string }
+  ) {
     super(message)
     this.name = 'ApiClientError'
     this.status = status
     this.code = code
     this.details = details
+    this.path = context?.path ?? 'unknown'
+    this.method = context?.method ?? 'GET'
   }
 }
 
-async function parseResponseBody(response: Response): Promise<unknown> {
+type ParsedResponseBody = {
+  json: unknown | null
+  text: string
+  contentType: string
+}
+
+async function parseResponseBody(response: Response): Promise<ParsedResponseBody> {
   const contentType = response.headers.get('content-type') ?? ''
+  const text = await response.text()
+
   if (!contentType.includes('application/json')) {
-    return null
+    return { json: null, text, contentType }
   }
+
   try {
-    return await response.json()
+    return { json: JSON.parse(text), text, contentType }
   } catch {
-    return null
+    return { json: null, text, contentType }
   }
+}
+
+function buildErrorMessage(
+  status: number,
+  contentType: string,
+  text: string,
+  apiMessage?: string
+): { message: string; code: string } {
+  if (apiMessage) {
+    return { message: apiMessage, code: 'API_ERROR' }
+  }
+
+  if (status === 404 && contentType.includes('text/html')) {
+    return {
+      message:
+        'Route API introuvable (404) — Next.js a renvoyé une page HTML au lieu de JSON. Vérifiez que le fichier route.ts existe et que le serveur dev a bien recompilé.',
+      code: 'ROUTE_NOT_FOUND',
+    }
+  }
+
+  if (!contentType.includes('application/json')) {
+    const preview = text.replace(/\s+/g, ' ').slice(0, 120)
+    return {
+      message: `Réponse inattendue (${status}, ${contentType || 'sans Content-Type'}) : ${preview || '(corps vide)'}`,
+      code: 'INVALID_RESPONSE_FORMAT',
+    }
+  }
+
+  return { message: `Erreur HTTP ${status} sans message détaillé.`, code: 'HTTP_ERROR' }
+}
+
+function isExpectedSessionCheckFailure(path: string, method: string, status: number): boolean {
+  return status === 401 && method === 'GET' && path === '/api/auth/me'
+}
+
+function logApiError(
+  method: string,
+  path: string,
+  status: number,
+  contentType: string,
+  text: string,
+  parsedBody: unknown | null
+) {
+  if (isExpectedSessionCheckFailure(path, method, status)) {
+    return
+  }
+
+  const payload = {
+    method,
+    path,
+    status,
+    contentType: contentType || '(absent)',
+    bodyPreview: text.replace(/\s+/g, ' ').slice(0, 300),
+    parsedBody,
+  }
+
+  if (status === 401 || status === 403) {
+    console.info('[api-client] Accès refusé', payload)
+    return
+  }
+
+  console.error('[api-client] Requête échouée', payload)
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? 'GET').toUpperCase()
+
   const response = await fetch(path, {
     ...init,
     headers: {
@@ -62,16 +145,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     credentials: 'include',
   })
 
-  const rawBody = await parseResponseBody(response)
+  const { json: rawBody, text, contentType } = await parseResponseBody(response)
 
   if (!response.ok) {
     const body = (rawBody ?? {}) as ApiErrorResponse
     const errorObject = typeof body.error === 'string' ? { message: body.error } : (body.error ?? {})
+    const apiMessage = errorObject.message ?? body.message
+    const { message, code } = buildErrorMessage(response.status, contentType, text, apiMessage)
+
+    logApiError(method, path, response.status, contentType, text, rawBody)
+
     throw new ApiClientError(
-      errorObject.message ?? body.message ?? 'Une erreur est survenue.',
+      message,
       response.status,
-      errorObject.code ?? 'API_ERROR',
-      body.data
+      errorObject.code ?? code,
+      body.data ?? (rawBody === null ? { rawText: text.slice(0, 500) } : undefined),
+      { path, method }
     )
   }
 
@@ -213,6 +302,107 @@ export type UseClueInput = {
   stepId: string
 }
 
+export type ParticipationPreGameStep = {
+  id: string
+  title: string
+  description: string
+  orderIndex: number
+  pointsReward: number
+  _count: {
+    clues: number
+  }
+}
+
+export type ParticipationPreGameHunt = {
+  id: string
+  title: string
+  description: string | null
+  location: string
+  difficulty: string
+  bannerUrl: string | null
+  startLat: number
+  startLng: number
+  createdBy: {
+    username: string
+  }
+  steps: ParticipationPreGameStep[]
+  _count: {
+    steps: number
+  }
+}
+
+export type ParticipationPreGameParticipant = {
+  participationId: string
+  username: string
+  totalScore: number
+  status: string
+  isCurrentUser: boolean
+}
+
+export type ParticipationPreGame = {
+  participation: ParticipationPublic & {
+    currentStep: ParticipationPublic['stepProgress'][number] | null
+    completedSteps: ParticipationPublic['stepProgress']
+  }
+  hunt: ParticipationPreGameHunt
+  participants: ParticipationPreGameParticipant[]
+}
+
+export type ParticipationGameplayClue = {
+  orderIndex: number
+  penaltyPoints: number
+  content?: string
+}
+
+export type ParticipationGameplay = {
+  participation: {
+    id: string
+    status: string
+    totalScore: number
+    huntId: string
+    completedStepsCount: number
+    totalStepsCount: number
+    currentStep: {
+      stepId: string
+      cluesUsed: number
+      step: {
+        id: string
+        title: string
+        description: string
+        latitude: number
+        longitude: number
+        radiusMeters: number
+        orderIndex: number
+        pointsReward: number
+        arMarkerType: string | null
+        arAssetUrl: string | null
+        clues: ParticipationGameplayClue[]
+      }
+    } | null
+  }
+  hunt: {
+    id: string
+    title: string
+    location: string | null
+    difficulty: string | null
+  }
+}
+
+export type CompleteStepResult = {
+  participationId: string
+  stepId: string
+  pointsEarned: number
+  totalScore: number
+}
+
+export type UseClueResult = {
+  clue: {
+    content: string
+  }
+  cluesUsed: number
+  remainingClues: number
+}
+
 // Step/Clue types
 export type CreateStepInput = {
   title: string
@@ -314,13 +504,21 @@ export const apiClient = {
     request<ParticipationPublic>(`/api/participations/${participationId}`, {
       method: 'GET',
     }),
+  getParticipationPreGame: (participationId: string) =>
+    request<ParticipationPreGame>(`/api/participations/${participationId}/pre-game`, {
+      method: 'GET',
+    }),
+  getParticipationGameplay: (participationId: string) =>
+    request<ParticipationGameplay>(`/api/participations/${participationId}/gameplay`, {
+      method: 'GET',
+    }),
   completeStep: (participationId: string, input: CompleteStepInput) =>
-    request<ParticipationPublic>(`/api/participations/${participationId}/complete-step`, {
+    request<CompleteStepResult>(`/api/participations/${participationId}/complete-step`, {
       method: 'POST',
       body: JSON.stringify(input),
     }),
   useClue: (participationId: string, input: UseClueInput) =>
-    request<ParticipationPublic>(`/api/participations/${participationId}/use-clue`, {
+    request<UseClueResult>(`/api/participations/${participationId}/use-clue`, {
       method: 'POST',
       body: JSON.stringify(input),
     }),
